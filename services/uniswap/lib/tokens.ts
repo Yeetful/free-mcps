@@ -30,8 +30,41 @@ const KNOWN: Record<string, { address: `0x${string}`; decimals: number }> = {
 
 const onchainCache = new Map<string, TokenInfo>();
 
+// Official Uniswap token list (tokens.uniswap.org) filtered to Base — cached
+// 24h, so UNI/LINK/AAVE/… resolve without hand-typing addresses. Failure
+// degrades to the static map + the helpful error.
+let listCache: Record<string, TokenInfo> = {};
+let listLoadedAt = 0;
+async function officialListToken(upperSymbol: string): Promise<TokenInfo | undefined> {
+  if (Date.now() - listLoadedAt > 24 * 60 * 60 * 1000 || Object.keys(listCache).length === 0) {
+    try {
+      const res = await fetch(process.env.TOKEN_LIST_URL || "https://tokens.uniswap.org", {
+        headers: { accept: "application/json" },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { tokens?: { chainId: number; address: string; symbol: string; decimals: number }[] };
+        const next: Record<string, TokenInfo> = {};
+        for (const tok of json.tokens ?? []) {
+          if (tok.chainId !== 8453 || !isAddress(tok.address) || !Number.isInteger(tok.decimals)) continue;
+          const key = tok.symbol.toUpperCase();
+          if (!next[key]) next[key] = { address: getAddress(tok.address), symbol: tok.symbol, decimals: tok.decimals };
+        }
+        if (Object.keys(next).length > 0) {
+          listCache = next;
+          listLoadedAt = Date.now();
+        }
+      }
+    } catch {
+      /* degrade */
+    }
+  }
+  return listCache[upperSymbol];
+}
+
 /** Resolve a symbol or 0x address to token info. Unknown addresses are read
- *  on-chain (decimals + symbol) and cached; unknown symbols throw. */
+ *  on-chain (decimals + symbol) and cached; unknown symbols consult the
+ *  official Uniswap Base token list before throwing. */
 export async function resolveToken(input: string): Promise<TokenInfo> {
   const t = input.trim();
   const upper = t.toUpperCase();
@@ -41,8 +74,10 @@ export async function resolveToken(input: string): Promise<TokenInfo> {
   const known = KNOWN[upper];
   if (known) return { address: known.address, symbol: upper, decimals: known.decimals };
   if (!isAddress(t)) {
+    const dyn = await officialListToken(upper);
+    if (dyn) return dyn;
     throw new Error(
-      `Unknown token "${input}". Use a known Base symbol (${Object.keys(KNOWN).join(", ")}, ETH) or a 0x address.`,
+      `Unknown token "${input}". Use a known Base symbol (${Object.keys(KNOWN).join(", ")}, ETH), any symbol on the official Uniswap Base list, or a 0x address.`,
     );
   }
   const addr = getAddress(t);

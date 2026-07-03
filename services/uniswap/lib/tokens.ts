@@ -38,22 +38,25 @@ let listLoadedAt = 0;
 async function officialListToken(upperSymbol: string): Promise<TokenInfo | undefined> {
   if (Date.now() - listLoadedAt > 24 * 60 * 60 * 1000 || Object.keys(listCache).length === 0) {
     try {
-      const res = await fetch(process.env.TOKEN_LIST_URL || "https://tokens.uniswap.org", {
-        headers: { accept: "application/json" },
-        signal: AbortSignal.timeout(8000),
-      });
-      if (res.ok) {
-        const json = (await res.json()) as { tokens?: { chainId: number; address: string; symbol: string; decimals: number }[] };
-        const next: Record<string, TokenInfo> = {};
-        for (const tok of json.tokens ?? []) {
-          if (tok.chainId !== 8453 || !isAddress(tok.address) || !Number.isInteger(tok.decimals)) continue;
-          const key = tok.symbol.toUpperCase();
-          if (!next[key]) next[key] = { address: getAddress(tok.address), symbol: tok.symbol, decimals: tok.decimals };
-        }
-        if (Object.keys(next).length > 0) {
-          listCache = next;
-          listLoadedAt = Date.now();
-        }
+      // Two sources, earlier wins symbol collisions: Uniswap official (thin on
+      // Base — no LINK) then Coingecko's per-chain Base list (~2.3k tokens).
+      const urls = (process.env.TOKEN_LIST_URLS || "https://tokens.uniswap.org,https://tokens.coingecko.com/base/all.json").split(",");
+      const next: Record<string, TokenInfo> = {};
+      for (const url of urls) {
+        try {
+          const res = await fetch(url.trim(), { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+          if (!res.ok) continue;
+          const json = (await res.json()) as { tokens?: { chainId: number; address: string; symbol: string; decimals: number }[] };
+          for (const tok of json.tokens ?? []) {
+            if (tok.chainId !== 8453 || !isAddress(tok.address) || !Number.isInteger(tok.decimals)) continue;
+            const key = tok.symbol.toUpperCase();
+            if (!next[key]) next[key] = { address: getAddress(tok.address), symbol: tok.symbol, decimals: tok.decimals };
+          }
+        } catch { /* next source */ }
+      }
+      if (Object.keys(next).length > 0) {
+        listCache = next;
+        listLoadedAt = Date.now();
       }
     } catch {
       /* degrade */

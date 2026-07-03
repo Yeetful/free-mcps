@@ -5,8 +5,8 @@ The website directory rows are already seeded on Neon pointing at these hosts:
 
 | Service | Vercel root directory | Domain (seeded in DB) |
 |---|---|---|
-| uniswap | `services/uniswap` | `uniswap-free.yeetful.com` |
-| snapshot | `services/snapshot` | `snapshot-free.yeetful.com` |
+| uniswap | `services/uniswap` | `uniswap-mcp.yeetful.com` |
+| snapshot | `services/snapshot` | `snapshot-mcp.yeetful.com` |
 
 ## Steps (per service, ~3 min)
 
@@ -20,21 +20,21 @@ The website directory rows are already seeded on Neon pointing at these hosts:
    - `RATE_LIMIT_PER_MINUTE` (default 60/IP)
 4. Deploy, then add the custom domain above (Settings → Domains; DNS CNAME →
    `cname.vercel-dns.com`).
-5. Smoke: `curl https://uniswap-free.yeetful.com/api/info` → `"gated": false`,
+5. Smoke: `curl https://uniswap-mcp.yeetful.com/api/info` → `"gated": false`,
    then a live tools/list:
    ```bash
-   curl -s -X POST https://uniswap-free.yeetful.com/mcp \
+   curl -s -X POST https://uniswap-mcp.yeetful.com/mcp \
      -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
      -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | grep -o '"name":"[a-z_]*"'
    ```
 
-## Until the deploys exist
+## Local dev against localhost
 
 The website rows are live (FREE badge) but prod calls to these hosts fail with
 a receipt note. Local testing works today — in `website/.env.local`:
 
 ```
-FREE_MCP_URL_OVERRIDES={"uniswap-free.yeetful.com":"http://localhost:3261","snapshot-free.yeetful.com":"http://localhost:3262"}
+FREE_MCP_URL_OVERRIDES={"uniswap-mcp.yeetful.com":"http://localhost:3261","snapshot-mcp.yeetful.com":"http://localhost:3262"}
 ```
 
 and run the services locally (`next start -p 3261` in services/uniswap,

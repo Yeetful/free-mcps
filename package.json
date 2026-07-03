@@ -1,0 +1,21 @@
+{
+  "name": "free-mcps",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Yeetful's fleet of FREE (non-gated) MCP services. One repo, many thin services, each deployed to its own subdomain. No payment gate — shared MCP plumbing + rate limiting live in @yeetful/mcp-kit. Paid siblings live in x402-services.",
+  "packageManager": "pnpm@8.15.4",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,203 @@
+import { z } from "zod";
+import type { createMcpHandler } from "mcp-handler";
+import { bestV3Quote, presentQuote, sqrtPriceToPrice, v3Pools, v4PoolStates } from "./quote";
+import { buildSwap, buildUnwrap, buildWrap, MAX_SLIPPAGE_BPS } from "./swap";
+import { formatAtoms, humanToAtoms, resolveToken } from "./tokens";
+
+function ok(payload: unknown) {
+  return { content: [{ type: "text" as const, text: JSON.stringify(payload) }] };
+}
+
+function fail(message: string) {
+  return { content: [{ type: "text" as const, text: message }], isError: true };
+}
+
+async function guarded<T>(run: () => Promise<T>) {
+  try {
+    return ok(await run());
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : "Call failed.");
+  }
+}
+
+type Server = Parameters<Parameters<typeof createMcpHandler>[0]>[0];
+
+const tokenArg = (side: string) =>
+  z.string().describe(`${side} token — a Base symbol (USDC, WETH, ETH, DAI, cbETH, USDbC, cbBTC) or a 0x address (decimals are read on-chain).`);
+const amountArg = z
+  .string()
+  .describe('Amount in HUMAN units of the sell token, e.g. "100" or "0.5". Converted with the token\'s real decimals — never pass atoms.');
+const fromArg = z
+  .string()
+  .regex(/^0x[0-9a-fA-F]{40}$/)
+  .describe("The payer's wallet address. It is always the swap recipient — this service never routes proceeds elsewhere.");
+
+/** Register the Uniswap tool surface. */
+export function registerUniswapTools(server: Server): void {
+  // ── Reads ──────────────────────────────────────────────────────────────────
+  server.registerTool(
+    "quote",
+    {
+      title: "Uniswap Quote (Base)",
+      description:
+        "Live exact-in quote across every Uniswap v3 fee tier on Base, straight from QuoterV2 on-chain (no API key, no indexer lag). Returns the best tier, expected output in atoms AND human units, gas estimate, and what every other tier would give.",
+      inputSchema: { sellToken: tokenArg("Sell"), buyToken: tokenArg("Buy"), amount: amountArg },
+    },
+    async ({ sellToken, buyToken, amount }) =>
+      guarded(async () => {
+        const [tin, tout] = await Promise.all([resolveToken(sellToken), resolveToken(buyToken)]);
+        if (tin.address === tout.address) throw new Error("sellToken and buyToken must differ.");
+        return presentQuote(await bestV3Quote(tin, tout, humanToAtoms(amount, tin.decimals)));
+      }),
+  );
+
+  server.registerTool(
+    "price",
+    {
+      title: "Spot Price (Base)",
+      description:
+        "Current spot price for a token pair from the most liquid Uniswap v3 pool on Base (slot0, decimals-adjusted). Both directions returned.",
+      inputSchema: { baseToken: tokenArg("Base"), quoteToken: tokenArg("Quote") },
+    },
+    async ({ baseToken, quoteToken }) =>
+      guarded(async () => {
+        const [a, b] = await Promise.all([resolveToken(baseToken), resolveToken(quoteToken)]);
+        if (a.address === b.address) throw new Error("Tokens must differ.");
+        const pools = await v3Pools(a, b);
+        const live = pools.filter((p) => p.liquidity > 0n).sort((x, y) => (y.liquidity > x.liquidity ? 1 : -1));
+        if (live.length === 0) throw new Error(`No live Uniswap v3 pool for ${a.symbol}/${b.symbol} on Base.`);
+        const top = live[0];
+        // slot0 prices token0 in token1 — orient to the caller's pair.
+        const aIsToken0 = a.address.toLowerCase() < b.address.toLowerCase();
+        const [t0, t1] = aIsToken0 ? [a, b] : [b, a];
+        const price0in1 = sqrtPriceToPrice(top.sqrtPriceX96, t0.decimals, t1.decimals);
+        return {
+          chainId: 8453,
+          pool: top.pool,
+          feeTierBps: top.fee / 100,
+          liquidity: top.liquidity.toString(),
+          price: {
+            [`${t0.symbol}_in_${t1.symbol}`]: price0in1,
+            note: `1 ${t0.symbol} = ${price0in1} ${t1.symbol} (most liquid pool, ${top.fee / 100}bps)`,
+          },
+        };
+      }),
+  );
+
+  server.registerTool(
+    "pool_info",
+    {
+      title: "Pool State v3 + v4 (Base)",
+      description:
+        "Every Uniswap pool for a pair on Base: v3 pools per fee tier (address, sqrtPriceX96, tick, in-range liquidity) AND canonical hookless v4 pools via StateView (v4 pairs WETH trades against native ETH — both are probed). Read-only.",
+      inputSchema: { tokenA: tokenArg("First"), tokenB: tokenArg("Second") },
+    },
+    async ({ tokenA, tokenB }) =>
+      guarded(async () => {
+        const [a, b] = await Promise.all([resolveToken(tokenA), resolveToken(tokenB)]);
+        if (a.address === b.address) throw new Error("Tokens must differ.");
+        const [v3, v4] = await Promise.all([v3Pools(a, b), v4PoolStates(a, b)]);
+        return {
+          chainId: 8453,
+          pair: `${a.symbol}/${b.symbol}`,
+          v3: v3.map((p) => ({
+            feeTierBps: p.fee / 100,
+            pool: p.pool,
+            sqrtPriceX96: p.sqrtPriceX96.toString(),
+            tick: p.tick,
+            liquidity: p.liquidity.toString(),
+          })),
+          v4: v4.map((p) => ({
+            feeTierBps: p.fee / 100,
+            poolId: p.poolId,
+            pairsNativeEth: p.native,
+            sqrtPriceX96: p.sqrtPriceX96.toString(),
+            tick: p.tick,
+            lpFeeBps: p.lpFee / 100,
+            liquidity: p.liquidity.toString(),
+          })),
+        };
+      }),
+  );
+
+  // ── Builds (the user signs — this service never holds keys) ───────────────
+  server.registerTool(
+    "build_swap",
+    {
+      title: "Build Swap Transaction (Base)",
+      description:
+        "Turn a swap into the exact transaction to sign: fresh best-tier quote → amountOutMinimum minus your slippage bound → SwapRouter02 exactInputSingle inside multicall(deadline). Recipient is ALWAYS the payer. Returns {action:'send_transaction'} plus the ERC-20 approve step when allowance is short (native ETH in needs no approval), and an eth_call dry-run of the exact bytes. Nothing is signed or submitted.",
+      inputSchema: {
+        sellToken: tokenArg("Sell"),
+        buyToken: tokenArg("Buy"),
+        amount: amountArg,
+        from: fromArg,
+        slippageBps: z.number().int().min(0).max(MAX_SLIPPAGE_BPS).optional()
+          .describe("Slippage tolerance in basis points (default 50 = 0.5%, max 500)."),
+        deadlineSec: z.number().int().min(30).max(3600).optional()
+          .describe("Seconds until the transaction expires (default 600)."),
+      },
+    },
+    async ({ sellToken, buyToken, amount, from, slippageBps, deadlineSec }) =>
+      guarded(() => buildSwap({ sellToken, buyToken, amount, from: from as `0x${string}`, slippageBps, deadlineSec })),
+  );
+
+  server.registerTool(
+    "build_wrap",
+    {
+      title: "Wrap ETH → WETH (Base)",
+      description: "Build the WETH deposit transaction (native ETH → WETH). Returns {action:'send_transaction'}.",
+      inputSchema: { amount: amountArg, from: fromArg },
+    },
+    async ({ amount, from }) => guarded(async () => buildWrap(amount, from)),
+  );
+
+  server.registerTool(
+    "build_unwrap",
+    {
+      title: "Unwrap WETH → ETH (Base)",
+      description: "Build the WETH withdraw transaction (WETH → native ETH). Returns {action:'send_transaction'}.",
+      inputSchema: { amount: amountArg, from: fromArg },
+    },
+    async ({ amount, from }) => guarded(async () => buildUnwrap(amount, from)),
+  );
+
+  // ── Free helper (schema hint for agents) ───────────────────────────────────
+  server.registerTool(
+    "convert_amount",
+    {
+      title: "Convert Human Amount ↔ Atoms",
+      description:
+        "Utility: convert a human amount to atoms for a token (decimals read on-chain for unknown addresses). Use when composing calls to other protocols.",
+      inputSchema: { token: tokenArg("The"), amount: amountArg },
+    },
+    async ({ token, amount }) =>
+      guarded(async () => {
+        const t = await resolveToken(token);
+        const atoms = humanToAtoms(amount, t.decimals);
+        return { token: t.symbol, address: t.address, decimals: t.decimals, amount: formatAtoms(atoms, t.decimals), atoms: atoms.toString() };
+      }),
+  );
+}
+
+/** The tool the Bazaar discovery block advertises. */
+export const PRIMARY_TOOL = {
+  name: "quote",
+  description:
+    "Live Uniswap v3 exact-in quote on Base across every fee tier, direct from QuoterV2 on-chain — best tier, expected output, gas estimate.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      sellToken: { type: "string", description: "Base symbol (USDC, WETH, ETH, …) or 0x address" },
+      buyToken: { type: "string", description: "Base symbol or 0x address" },
+      amount: { type: "string", description: 'Human units of the sell token, e.g. "100"' },
+    },
+    required: ["sellToken", "buyToken", "amount"],
+  },
+  example: {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: { name: "quote", arguments: { sellToken: "USDC", buyToken: "WETH", amount: "100" } },
+  },
+} as const;

@@ -47,10 +47,14 @@ export function registerSnapshotTools(server: Server): void {
         "Recent Snapshot governance proposals. Filter by `space` (e.g. aave.eth) and/or `state` (active|closed|pending). The default — active proposals across all DAOs — answers 'what DAO votes are live right now'.",
       inputSchema: {
         space: z.string().optional().describe("Snapshot space id, e.g. aave.eth, ens.eth."),
+        // Planners/users say "open" for live votes — coerce the common aliases
+        // instead of failing validation on the obvious intent.
         state: z
-          .enum(["active", "closed", "pending"])
-          .optional()
-          .describe("Proposal state filter."),
+          .preprocess(
+            (v) => (v === "open" || v === "live" || v === "ongoing" ? "active" : v),
+            z.enum(["active", "closed", "pending"]).optional(),
+          )
+          .describe("Proposal state filter: active | closed | pending ('open'/'live' are accepted as active)."),
         first: firstArg,
       },
     },

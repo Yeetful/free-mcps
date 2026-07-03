@@ -30,8 +30,8 @@ The website directory rows are already seeded on Neon pointing at these hosts:
 
 ## Local dev against localhost
 
-The website rows are live (FREE badge) but prod calls to these hosts fail with
-a receipt note. Local testing works today — in `website/.env.local`:
+Both services are DEPLOYED and live (2026-07-03) — prod chat calls them
+directly. To develop against local copies instead, in `website/.env.local`:
 
 ```
 FREE_MCP_URL_OVERRIDES={"uniswap-mcp.yeetful.com":"http://localhost:3261","snapshot-mcp.yeetful.com":"http://localhost:3262"}

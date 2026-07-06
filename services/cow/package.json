@@ -1,0 +1,33 @@
+{
+  "name": "cow-mcp-free",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CoW Protocol as a FREE (non-gated) MCP service: swap quotes, EIP-712 order construction (swaps + limit orders — the CLIENT signs, this service never holds keys), signed-order submission, per-address order/trade/portfolio views, solver competition data, and a searchable corpus of the official CoW docs. Against the public CoW order-book API.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "smoke": "tsx scripts/smoke.ts",
+    "build-docs": "tsx scripts/build-docs.ts"
+  },
+  "dependencies": {
+    "@yeetful/mcp-kit": "workspace:*",
+    "mcp-handler": "1.1.0",
+    "next": "16.2.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "viem": "^2.21.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

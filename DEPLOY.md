@@ -8,6 +8,7 @@ The website directory rows are already seeded on Neon pointing at these hosts:
 | uniswap | `services/uniswap` | `uniswap-mcp.yeetful.com` |
 | snapshot | `services/snapshot` | `snapshot-mcp.yeetful.com` |
 | hyperliquid | `services/hyperliquid` | `hyperliquid-mcp.yeetful.com` (not yet deployed/seeded) |
+| cow | `services/cow` | `cow-mcp.yeetful.com` (not yet deployed/seeded) |
 
 ## Steps (per service, ~3 min)
 
@@ -35,9 +36,15 @@ Both services are DEPLOYED and live (2026-07-03) — prod chat calls them
 directly. To develop against local copies instead, in `website/.env.local`:
 
 ```
-FREE_MCP_URL_OVERRIDES={"uniswap-mcp.yeetful.com":"http://localhost:3261","snapshot-mcp.yeetful.com":"http://localhost:3262"}
+FREE_MCP_URL_OVERRIDES={"uniswap-mcp.yeetful.com":"http://localhost:3261","snapshot-mcp.yeetful.com":"http://localhost:3262","cow-mcp.yeetful.com":"http://localhost:3263"}
 ```
 
 and run the services locally (`next start -p 3261` in services/uniswap,
-`-p 3262` in services/snapshot), or run the standing proof:
-`npx tsx scripts/test-free-mcps-live.ts` (in website/, env as above).
+`-p 3262` in services/snapshot, `-p 3263` in services/cow), or run the
+standing proof: `npx tsx scripts/test-free-mcps-live.ts` (in website/, env as
+above).
+
+Note (cow): the searchable docs corpus (`services/cow/lib/docs-data.json`) is
+COMMITTED — regenerate with `pnpm build-docs` in services/cow (downloads
+github.com/cowprotocol/docs) and commit the result; the deploy needs no
+network/build step for it.

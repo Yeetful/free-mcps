@@ -17,6 +17,7 @@ export async function GET() {
       { name: "build_wrap", description: "ETH → WETH deposit tx." },
       { name: "build_unwrap", description: "WETH → ETH withdraw tx." },
       { name: "convert_amount", description: "Human amount ↔ atoms with real on-chain decimals." },
+      { name: "read_contract", description: "Escape hatch: one guarded read-only eth_call against any Base contract (balances, allowances, pool state, exact-output quotes) — payable refused, responses truncated." },
     ],
     safety:
       "Builds only — never holds keys, never signs, never submits. Swap recipient is always the payer. Designed to flow into Yeetful's guardrail + sign pipeline.",

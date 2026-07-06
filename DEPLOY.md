@@ -7,6 +7,7 @@ The website directory rows are already seeded on Neon pointing at these hosts:
 |---|---|---|
 | uniswap | `services/uniswap` | `uniswap-mcp.yeetful.com` |
 | snapshot | `services/snapshot` | `snapshot-mcp.yeetful.com` |
+| hyperliquid | `services/hyperliquid` | `hyperliquid-mcp.yeetful.com` (not yet deployed/seeded) |
 
 ## Steps (per service, ~3 min)
 

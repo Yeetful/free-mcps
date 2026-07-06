@@ -106,7 +106,8 @@ export function registerSnapshotTools(server: Server): void {
     "list_spaces",
     {
       title: "List Spaces",
-      description: "Browse DAO spaces, most-followed first.",
+      description:
+        "Browse and discover DAO governance spaces on Snapshot, most-followed first — which DAOs exist, the top DAOs by followers, find a DAO to join or watch.",
       inputSchema: { first: firstArg },
     },
     async ({ first }) => present(await queries.listSpaces(first)),

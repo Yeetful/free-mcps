@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@yeetful/mcp-kit": "workspace:*",
+    "graphql": "^16",
     "mcp-handler": "1.1.0",
     "next": "16.2.7",
     "react": "^19.0.0",

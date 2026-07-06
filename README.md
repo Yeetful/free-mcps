@@ -20,8 +20,8 @@ fleet). Same architecture, same trust model, minus the 402:
 
 | Service | What it does | Tools |
 |---|---|---|
-| `services/uniswap` | Uniswap v3 + v4 on Base, read directly over RPC: live quotes (QuoterV2, every fee tier), spot prices, pool state, deterministic swap-tx building (SwapRouter02 calldata + approve step + dry-run) | `quote`, `price`, `pool_info`, `build_swap`, `build_wrap`, `build_unwrap`, `convert_amount` |
-| `services/snapshot` | Snapshot DAO governance: browse spaces/proposals/votes, build the EIP-712 vote the user signs, relay the signed envelope to the sequencer | `list_proposals`, `get_proposal`, `list_votes`, `get_space`, `list_spaces`, `prepare_vote`, `submit_vote` |
+| `services/uniswap` | Uniswap v3 + v4 on Base, read directly over RPC: live quotes (QuoterV2, every fee tier), spot prices, pool state, deterministic swap-tx building (SwapRouter02 calldata + approve step + dry-run) | `quote`, `price`, `pool_info`, `build_swap`, `build_wrap`, `build_unwrap`, `convert_amount`, `read_contract` |
+| `services/snapshot` | Snapshot DAO governance: browse spaces/proposals/votes, build the EIP-712 vote the user signs, relay the signed envelope to the sequencer | `list_proposals`, `get_proposal`, `list_votes`, `get_space`, `list_spaces`, `graphql_query`, `prepare_vote`, `submit_vote` |
 
 ## Develop
 

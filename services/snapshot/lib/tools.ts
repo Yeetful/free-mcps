@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { createMcpHandler } from "mcp-handler";
-import { queries, fetchProposalForVote, type SnapshotResult } from "./snapshot";
+import { queries, snapshotQuery, fetchProposalForVote, type SnapshotResult } from "./snapshot";
+import { guardQuery, ALLOWED_ROOT_FIELDS } from "./graphql-guard";
 import { buildVoteTypedData, submitVote, resolveChoiceLabel, type SnapshotChoice } from "./vote";
 
 function present(result: SnapshotResult) {
@@ -44,9 +45,14 @@ export function registerSnapshotTools(server: Server): void {
     {
       title: "List DAO Proposals",
       description:
-        "Recent Snapshot governance proposals. Filter by `space` (e.g. aave.eth) and/or `state` (active|closed|pending). The default — active proposals across all DAOs — answers 'what DAO votes are live right now'.",
+        "Recent Snapshot governance proposals. Filter by `space` (e.g. aave.eth), `state` (active|closed|pending), and/or `follower` (an EVM address — only proposals in the spaces that address follows; the join is done server-side, so 'what can I vote on' / 'do I have open proposals' is one call with follower + state=active). The default — active proposals across all DAOs — answers 'what DAO votes are live right now'.",
       inputSchema: {
         space: z.string().optional().describe("Snapshot space id, e.g. aave.eth, ens.eth."),
+        follower: z
+          .string()
+          .regex(/^0x[a-fA-F0-9]{40}$/)
+          .optional()
+          .describe("EVM address — scope to proposals in the spaces this address follows (their governance feed)."),
         // Planners/users say "open" for live votes — coerce the common aliases
         // instead of failing validation on the obvious intent.
         state: z
@@ -58,7 +64,8 @@ export function registerSnapshotTools(server: Server): void {
         first: firstArg,
       },
     },
-    async ({ space, state, first }) => present(await queries.listProposals({ space, state, first })),
+    async ({ space, state, first, follower }) =>
+      present(await queries.listProposals({ space, state, first, follower })),
   );
 
   server.registerTool(
@@ -103,6 +110,48 @@ export function registerSnapshotTools(server: Server): void {
       inputSchema: { first: firstArg },
     },
     async ({ first }) => present(await queries.listSpaces(first)),
+  );
+
+  // ── Escape hatch ───────────────────────────────────────────────────────────
+  // The curated tools cover the common intents; this exposes the hub's FULL
+  // read surface for the long tail (author filters, time windows, follows,
+  // voting power…) so new intents don't each need a new tool. READ-ONLY by
+  // structure (graphql-guard) — anything signable stays in the curated
+  // prepare_vote/submit_vote pair.
+  server.registerTool(
+    "graphql_query",
+    {
+      title: "Raw GraphQL Query (read-only)",
+      description: [
+        "Escape hatch: run any READ-ONLY GraphQL query against the Snapshot hub for filters the other tools don't cover. One `query` operation; no mutations, fragments, or introspection; responses truncated ~24k chars.",
+        `Root fields: ${[...ALLOWED_ROOT_FIELDS].join(", ")}.`,
+        'Useful where-filters — proposals(where:): space_in, state (active|closed|pending), author, author_in, title_contains, start_gte/start_lte, end_gte/end_lte · votes(where:): proposal, voter, space_in, vp_gte · follows(where:): follower, space_in · spaces(where:): id_in.',
+        'List args: first (max 100), skip, orderBy (field name string, e.g. "created", "vp", "followersCount"), orderDirection (asc|desc). Pass user values via `variables`, not string interpolation.',
+        'Example — spaces an address follows: query($f: String!){ follows(where:{follower:$f}){ space { id name } created } } with variables {"f":"0x…"}.',
+      ].join("\n"),
+      inputSchema: {
+        query: z.string().min(3).max(4000).describe("The GraphQL query document (single read-only operation)."),
+        variables: z
+          .preprocess(
+            // Planners often pass variables as a JSON string — accept both.
+            (v) => {
+              if (typeof v !== "string") return v;
+              try {
+                return JSON.parse(v);
+              } catch {
+                return v;
+              }
+            },
+            z.record(z.unknown()).optional(),
+          )
+          .describe('GraphQL variables as an object (or JSON string), e.g. {"f":"0xabc…"}.'),
+      },
+    },
+    async ({ query, variables }) => {
+      const guard = guardQuery(query, variables);
+      if (!guard.ok) return fail(`Query rejected: ${guard.error}`);
+      return present(await snapshotQuery(query, variables));
+    },
   );
 
   // ── Vote tools ─────────────────────────────────────────────────────────────
@@ -216,12 +265,13 @@ export function registerSnapshotTools(server: Server): void {
 export const PRIMARY_TOOL = {
   name: "list_proposals",
   description:
-    "Recent Snapshot DAO governance proposals (filter by space + state). Other tools: get_proposal, list_votes, get_space, list_spaces, prepare_vote (build EIP-712 vote), submit_vote (relay signed vote).",
+    "Recent Snapshot DAO governance proposals (filter by space + state + follower). Other tools: get_proposal, list_votes, get_space, list_spaces, graphql_query (read-only escape hatch for any hub filter), prepare_vote (build EIP-712 vote), submit_vote (relay signed vote).",
   inputSchema: {
     type: "object",
     properties: {
       space: { type: "string", description: "Snapshot space id, e.g. aave.eth." },
       state: { type: "string", enum: ["active", "closed", "pending"], description: "Proposal state." },
+      follower: { type: "string", description: "EVM address — only proposals in spaces this address follows." },
       first: { type: "number", description: "How many to return (max 100)." },
     },
     required: [],

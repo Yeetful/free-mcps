@@ -89,14 +89,51 @@ const PROPOSAL_FIELDS = `id title state type choices scores scores_total
   start end snapshot author quorum space { id name network symbol }`;
 
 export const queries = {
-  /** Recent proposals, optionally filtered by space + state (active|closed|pending). */
-  listProposals: (
-    args: { space?: string; state?: string; first?: number },
+  /** Recent proposals, optionally filtered by space + state (active|closed|pending)
+   *  and/or `follower` — an EVM address whose FOLLOWED spaces scope the search
+   *  (the follows→space_in join, done server-side so "what can I vote on" is
+   *  one tool call). */
+  listProposals: async (
+    args: { space?: string; state?: string; first?: number; follower?: string },
     opts?: SnapshotOpts,
-  ) => {
+  ): Promise<SnapshotResult> => {
     const where: Record<string, unknown> = {};
     if (args.space) where.space_in = [args.space];
     if (args.state) where.state = args.state;
+    if (args.follower) {
+      const follows = await snapshotQuery(
+        `query ($follower: String!) {
+          follows(first: 100, where: { follower: $follower }) { space { id } }
+        }`,
+        { follower: args.follower },
+        opts,
+      );
+      if (!follows.ok) return follows;
+      const followed = [
+        ...new Set(
+          ((follows.data as { follows?: { space?: { id?: string } }[] } | null)?.follows ?? [])
+            .map((f) => f?.space?.id)
+            .filter((id): id is string => !!id),
+        ),
+      ];
+      // Intersect with an explicit `space` filter; an empty scope is a real
+      // answer ("you follow no spaces"), never an unfiltered query.
+      const scoped = args.space ? followed.filter((id) => id === args.space) : followed;
+      if (scoped.length === 0) {
+        return {
+          ok: true,
+          status: 200,
+          data: {
+            proposals: [],
+            note: args.space
+              ? `${args.follower} does not follow ${args.space} on Snapshot.`
+              : `${args.follower} follows no spaces on Snapshot — no proposals in scope.`,
+          },
+          truncated: false,
+        };
+      }
+      where.space_in = scoped;
+    }
     return snapshotQuery(
       `query ($first: Int!, $where: ProposalWhere) {
         proposals(first: $first, orderBy: "created", orderDirection: desc, where: $where) {

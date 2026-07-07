@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { createMcpHandler } from "mcp-handler";
+import { readPortfolio } from "./balances";
 import { bestV3Quote, presentQuote, sqrtPriceToPrice, v3Pools, v4PoolStates } from "./quote";
 import { executeRead, KNOWN_CONTRACTS, MAX_RESPONSE_CHARS } from "./read-guard";
 import { buildSwap, buildUnwrap, buildWrap, MAX_SLIPPAGE_BPS } from "./swap";
@@ -123,6 +124,24 @@ export function registerUniswapTools(server: Server): void {
       }),
   );
 
+  server.registerTool(
+    "balances",
+    {
+      title: "Wallet Portfolio (Base)",
+      description:
+        "A wallet's Base portfolio in one call: native ETH + ERC-20 balances across a curated universe (USDC, WETH, DAI, cbETH, cbBTC, AERO, VIRTUAL, DEGEN, UNI, LINK, AAVE, MORPHO, …), each nonzero holding priced to USD from the most liquid Uniswap v3 pool on-chain (spot slot0 — no indexer, no key, no spend). Returns totalUsd and holdings sorted richest-first. Use to show a connected wallet what it holds, spot idle stablecoins, or pick a token to swap. Pass owner=\"$USER_ADDRESS\" for the connected user.",
+      inputSchema: {
+        owner: fromArg,
+        extraTokens: z
+          .array(z.string())
+          .max(20)
+          .optional()
+          .describe('Extra Base tokens to also check, as symbols or 0x addresses, e.g. ["PEPE","0x…"]. The curated majors are always scanned.'),
+      },
+    },
+    async ({ owner, extraTokens }) => guarded(() => readPortfolio(owner as `0x${string}`, extraTokens ?? [])),
+  );
+
   // ── Builds (the user signs — this service never holds keys) ───────────────
   server.registerTool(
     "build_swap",
@@ -226,7 +245,7 @@ export function registerUniswapTools(server: Server): void {
 export const PRIMARY_TOOL = {
   name: "quote",
   description:
-    "Live Uniswap v3 exact-in quote on Base across every fee tier, direct from QuoterV2 on-chain — best tier, expected output, gas estimate. Other tools: price, pool_info, build_swap/build_wrap/build_unwrap (unsigned txs the user signs — from = \"$USER_ADDRESS\" for the connected user), convert_amount, read_contract (read-only eth_call escape hatch for any Base contract).",
+    "Live Uniswap v3 exact-in quote on Base across every fee tier, direct from QuoterV2 on-chain — best tier, expected output, gas estimate. Other tools: price, pool_info, balances (a wallet's full Base portfolio priced to USD), build_swap/build_wrap/build_unwrap (unsigned txs the user signs — from = \"$USER_ADDRESS\" for the connected user), convert_amount, read_contract (read-only eth_call escape hatch for any Base contract).",
   inputSchema: {
     type: "object",
     properties: {

@@ -137,7 +137,8 @@ export const queries = {
     return snapshotQuery(
       `query ($first: Int!, $where: ProposalWhere) {
         proposals(first: $first, orderBy: "created", orderDirection: desc, where: $where) {
-          id title state type choices scores_total end space { id name }
+          id title state type choices scores scores_total start end
+          space { id name avatar network }
         }
       }`,
       { first: args.first ?? 10, where },
@@ -169,7 +170,7 @@ export const queries = {
   getSpace: (id: string, opts?: SnapshotOpts) =>
     snapshotQuery(
       `query ($id: String!) {
-        space(id: $id) { id name about network symbol proposalsCount followersCount }
+        space(id: $id) { id name about avatar network symbol proposalsCount followersCount }
       }`,
       { id },
       opts,
@@ -180,7 +181,7 @@ export const queries = {
     snapshotQuery(
       `query ($first: Int!) {
         spaces(first: $first, orderBy: "followersCount", orderDirection: desc) {
-          id name network proposalsCount followersCount
+          id name avatar network proposalsCount followersCount
         }
       }`,
       { first: first ?? 20 },

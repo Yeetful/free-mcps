@@ -292,7 +292,7 @@ export async function buildSwap(p: BuildSwapParams, opts?: BuildOpts) {
       `1. NOW — the user signs the single "deposit" transaction below: a plain ${isNative ? "native" : origin.symbol} transfer of exactly ${q.amountInFormatted} ${origin.symbol} on ${evm.label} to 1Click's one-time deposit address. This is the ONLY signature the whole cross-chain swap needs.`,
       `2. AFTER IT CONFIRMS — call submit_deposit_tx with the transaction hash and depositAddress ${q.depositAddress} (optional but recommended: it lets 1Click pick the deposit up faster).`,
       `3. AUTOMATIC — NEAR Intents solvers detect the deposit, execute the swap, and deliver ~${q.amountOutFormatted} ${destination.symbol} (minimum ${quoteView.receive.minimum} after slippage) straight to ${recipient} on ${chainLabel(destination.blockchain)}. No second signature, no claiming, no bridge UI.`,
-      `4. VERIFY — call await_completion (or check_status) with depositAddress ${q.depositAddress} until status is SUCCESS, then show the user the destination-chain transaction link from swapDetails.`,
+      `4. VERIFY — call await_completion (or check_status) with depositAddress ${q.depositAddress} until status is SUCCESS, then show the user the destination-chain transaction link from swapDetails — and re-read their balances with a wallet/portfolio tool so the reply shows the FRESH holdings on both chains, not pre-swap numbers.`,
     ],
     warnings: [
       `Send EXACTLY the quoted amount in ONE transfer. Less → refunded after the deadline; more → the excess is refunded to ${p.from} after the swap.`,

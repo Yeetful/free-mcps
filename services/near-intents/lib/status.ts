@@ -70,7 +70,7 @@ function nextStepFor(status: string, depositAddress: string): string {
     case "INCOMPLETE_DEPOSIT":
       return "Top up the SAME deposit address with the missing amount before the deadline, or wait for the automatic refund.";
     case "SUCCESS":
-      return "Done — show the user the destination transaction (swap.destinationTransactions has the explorer link). Nothing else to do.";
+      return "Done — show the user the destination transaction (swap.destinationTransactions has the explorer link), then RE-READ their balances with a wallet/portfolio tool (never reuse pre-swap numbers): the origin chain went down and the destination chain went up the moment this settled.";
     case "REFUNDED":
       return "The origin funds are back in the refund wallet. To retry, request a fresh build_swap (never reuse the old deposit address).";
     case "FAILED":

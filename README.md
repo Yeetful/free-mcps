@@ -23,6 +23,7 @@ fleet). Same architecture, same trust model, minus the 402:
 | `services/uniswap` | Uniswap v3 + v4 on Base, read directly over RPC: live quotes (QuoterV2, every fee tier), spot prices, pool state, deterministic swap-tx building (SwapRouter02 calldata + approve step + dry-run) | `quote`, `price`, `pool_info`, `build_swap`, `build_wrap`, `build_unwrap`, `convert_amount`, `read_contract` |
 | `services/snapshot` | Snapshot DAO governance: browse spaces/proposals/votes, build the EIP-712 vote the user signs, relay the signed envelope to the sequencer | `list_proposals`, `get_proposal`, `list_votes`, `get_space`, `list_spaces`, `graphql_query`, `prepare_vote`, `submit_vote` |
 | `services/hyperliquid` | Hyperliquid over the public API (read-only): perp + spot markets, orderbooks, candles, funding, per-address portfolio views (positions/balances/orders/fills/PnL), and real-time settlement watching over WebSocket | `markets`, `spot_markets`, `price`, `orderbook`, `candles`, `funding`, `portfolio`, `open_orders`, `fills`, `order_status`, `ledger`, `await_settlement`, `info_query` |
+| `services/aave` | Aave v4 over the official AaveKit API (Ethereum hub-and-spoke): markets + reserves with live APYs/caps, per-address portfolio (positions, earned interest, health factor, borrowing power), wallet balances with best yield, activity history, health-factor previews, and construction-only supply/withdraw/borrow/repay/collateral-toggle transactions the USER signs | `markets`, `reserves`, `portfolio`, `balances`, `activities`, `preview`, `build_supply`, `build_withdraw`, `build_borrow`, `build_repay`, `build_collateral_toggle`, `check_transaction`, `graphql_query` |
 | `services/cow` | CoW Protocol over the public order-book API (8 chains): swap quotes, EIP-712 order construction (swaps + LIMIT orders the USER signs — no keys held), signed-order submission + gasless cancellation, per-address order/trade/portfolio views, solver competition, and the official CoW docs bundled + searchable offline | `chains`, `quote`, `build_swap_order`, `build_limit_order`, `submit_order`, `cancel_orders`, `order_status`, `user_orders`, `user_trades`, `portfolio`, `native_price`, `solver_competition`, `api_get`, `docs_search`, `docs_page` |
 
 ## Develop
@@ -38,7 +39,9 @@ RPC), `SNAPSHOT_HUB_URL` / `SNAPSHOT_SEQUENCER_URL` (snapshot; default to the
 public hub/sequencer), `HYPERLIQUID_API_URL` / `HYPERLIQUID_WS_URL`
 (hyperliquid; default to mainnet, point at *.hyperliquid-testnet.xyz for
 testnet), `COW_API_URL` (cow; defaults to https://api.cow.fi — point at
-https://barn.api.cow.fi for staging), `RATE_LIMIT_PER_MINUTE` (default 60/IP).
+https://barn.api.cow.fi for staging), `AAVE_API_URL` (aave; defaults to
+https://api.v4.aave.com/graphql — the official AaveKit API),
+`RATE_LIMIT_PER_MINUTE` (default 60/IP).
 
 ## Shared kit
 

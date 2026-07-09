@@ -1,0 +1,32 @@
+{
+  "name": "aave-mcp-free",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aave as a FREE (non-gated) MCP service: v4 hubs/spokes/reserves with live APYs, per-address portfolio views (positions, earnings, health factor), and construction-only supply/withdraw/borrow/repay transactions via the official AaveKit API. This service never signs or submits.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "smoke": "tsx scripts/smoke.ts"
+  },
+  "dependencies": {
+    "@yeetful/mcp-kit": "workspace:*",
+    "graphql": "^16",
+    "mcp-handler": "1.1.0",
+    "next": "16.2.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

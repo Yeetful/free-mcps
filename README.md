@@ -26,6 +26,7 @@ fleet). Same architecture, same trust model, minus the 402:
 | `services/aave` | Aave v4 over the official AaveKit API (Ethereum hub-and-spoke): markets + reserves with live APYs/caps, per-address portfolio (positions, earned interest, health factor, borrowing power), wallet balances with best yield, activity history, health-factor previews, and construction-only supply/withdraw/borrow/repay/collateral-toggle transactions the USER signs | `markets`, `reserves`, `portfolio`, `balances`, `activities`, `preview`, `build_supply`, `build_withdraw`, `build_borrow`, `build_repay`, `build_collateral_toggle`, `check_transaction`, `graphql_query` |
 | `services/cow` | CoW Protocol over the public order-book API (8 chains): swap quotes, EIP-712 order construction (swaps + LIMIT orders the USER signs — no keys held), signed-order submission + gasless cancellation, per-address order/trade/portfolio views, solver competition, and the official CoW docs bundled + searchable offline | `chains`, `quote`, `build_swap_order`, `build_limit_order`, `submit_order`, `cancel_orders`, `order_status`, `user_orders`, `user_trades`, `portfolio`, `native_price`, `solver_competition`, `api_get`, `docs_search`, `docs_page` |
 | `services/near-intents` | Cross-chain swaps over the official NEAR Intents 1Click API (~190 assets, ~35 chains — USDC Base→Arbitrum, ETH→SOL, USDC→BTC…): dry-run quotes, then ONE unsigned deposit transfer the USER signs on any of 9 EVM origin chains; solvers deliver on the destination chain automatically, tracked to SUCCESS with explorer links. Every response narrates the flow step-by-step | `how_it_works`, `chains`, `tokens`, `quote`, `build_swap`, `submit_deposit_tx`, `check_status`, `await_completion` |
+| `services/yeetful-tool-wallet` | **Internal Yeetful tool** (the `yeetful-tool-*` naming marks first-party utility MCPs, vs protocol wrappers): multichain wallet reads via Alchemy (9 top EVM chains — Ethereum, Base, Arbitrum, Optimism, Polygon, BNB, Avalanche, Scroll, Gnosis): USD-priced whole-wallet portfolios (spam filtered, returns a structured payload the Yeetful chat renders as a rich card), gas balances, precise token balances, recent transfers w/ scam-symbol flagging, and tx confirmation status — the fresh-data layer after any swap/transfer settles | `chains`, `portfolio`, `gas_balances`, `token_balance`, `recent_transactions`, `transaction_status` |
 
 ## Develop
 
@@ -45,6 +46,7 @@ https://api.v4.aave.com/graphql — the official AaveKit API),
 `NEAR_INTENT_API_KEY` / `ONECLICK_API_URL` (near-intents; the 1Click JWT —
 works without it but 1Click then adds a 0.2% keyless fee per swap — and the
 API base, default https://1click.chaindefuser.com),
+`ALCHEMY_API_KEY` (yeetful-tool-wallet; REQUIRED — all reads go through Alchemy),
 `RATE_LIMIT_PER_MINUTE` (default 60/IP).
 
 ## Shared kit

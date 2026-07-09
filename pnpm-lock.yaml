@@ -280,7 +280,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.0)
 
-  services/wallet:
+  services/yeetful-tool-wallet:
     dependencies:
       '@yeetful/mcp-kit':
         specifier: workspace:*

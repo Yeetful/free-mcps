@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 // callers never need one).
 export async function GET() {
   return NextResponse.json({
-    name: "wallet-mcp-free",
+    name: "yeetful-tool-wallet",
     upstream: "Alchemy Data API + per-chain RPC (server-side key) across 9 top EVM chains",
     mcpEndpoint: "/mcp",
     gated: false,

@@ -1,7 +1,7 @@
 export default function Home() {
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: "64px 24px", lineHeight: 1.6 }}>
-      <h1 style={{ fontSize: 28, marginBottom: 4 }}>Wallet MCP</h1>
+      <h1 style={{ fontSize: 28, marginBottom: 4 }}>Yeetful Wallet MCP</h1>
       <p style={{ color: "#8b93a7", marginTop: 0 }}>
         Multichain wallet reads over MCP — the tools every DeFi conversation
         needs between the swaps: &quot;show my portfolio on Base and

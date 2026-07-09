@@ -1,8 +1,8 @@
 {
-  "name": "wallet-mcp-free",
+  "name": "yeetful-tool-wallet",
   "version": "0.1.0",
   "private": true,
-  "description": "Multichain wallet reads as a FREE (non-gated) MCP service: USD-priced portfolios, gas balances, precise token balances, recent transactions, and transaction status across 9 top EVM chains via Alchemy. Read-only — never signs, never submits.",
+  "description": "Yeetful internal tool (yeetful-tool-* fleet): multichain wallet reads as a FREE (non-gated) MCP service \u2014 USD-priced portfolios, gas balances, precise token balances, recent transactions, and transaction status across 9 top EVM chains via Alchemy. Read-only \u2014 never signs, never submits.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

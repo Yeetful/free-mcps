@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Wallet MCP · Yeetful",
+  title: "Yeetful Wallet MCP · Yeetful",
   description:
     "Multichain wallet reads over MCP — USD-priced portfolios, gas balances, token balances, recent transactions, and transaction status across 9 top EVM chains via Alchemy. Free, read-only, no API key required to call.",
 };

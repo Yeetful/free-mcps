@@ -10,6 +10,7 @@ The website directory rows are already seeded on Neon pointing at these hosts:
 | hyperliquid | `services/hyperliquid` | `hyperliquid-mcp.yeetful.com` (not yet deployed/seeded) |
 | cow | `services/cow` | `cow-mcp.yeetful.com` (not yet deployed/seeded) |
 | aave | `services/aave` | `aave-mcp.yeetful.com` (not yet deployed/seeded) |
+| near-intents | `services/near-intents` | `near-intents-mcp.yeetful.com` (not yet deployed/seeded) |
 
 ## Steps (per service, ~3 min)
 
@@ -20,6 +21,9 @@ The website directory rows are already seeded on Neon pointing at these hosts:
 3. Env vars — all optional:
    - `BASE_RPC_URL` (uniswap only, **recommended for prod** — the public Base
      RPC rate-limits; use an Alchemy/QuickNode URL)
+   - `NEAR_INTENT_API_KEY` (near-intents only, **recommended for prod** — the
+     1Click JWT; without it 1Click adds a 0.2% keyless fee to every swap.
+     Same value as `NEAR_INTENT_API_KEY` in website/.env.local.)
    - `RATE_LIMIT_PER_MINUTE` (default 60/IP)
 4. Deploy, then add the custom domain above (Settings → Domains; DNS CNAME →
    `cname.vercel-dns.com`).
@@ -37,12 +41,12 @@ Both services are DEPLOYED and live (2026-07-03) — prod chat calls them
 directly. To develop against local copies instead, in `website/.env.local`:
 
 ```
-FREE_MCP_URL_OVERRIDES={"uniswap-mcp.yeetful.com":"http://localhost:3261","snapshot-mcp.yeetful.com":"http://localhost:3262","cow-mcp.yeetful.com":"http://localhost:3263","aave-mcp.yeetful.com":"http://localhost:3266"}
+FREE_MCP_URL_OVERRIDES={"uniswap-mcp.yeetful.com":"http://localhost:3261","snapshot-mcp.yeetful.com":"http://localhost:3262","cow-mcp.yeetful.com":"http://localhost:3263","aave-mcp.yeetful.com":"http://localhost:3266","near-intents-mcp.yeetful.com":"http://localhost:3268"}
 ```
 
 and run the services locally (`next start -p 3261` in services/uniswap,
 `-p 3262` in services/snapshot, `-p 3263` in services/cow, `-p 3266` in
-services/aave), or run the
+services/aave, `-p 3268` in services/near-intents), or run the
 standing proof: `npx tsx scripts/test-free-mcps-live.ts` (in website/, env as
 above).
 

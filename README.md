@@ -25,6 +25,7 @@ fleet). Same architecture, same trust model, minus the 402:
 | `services/hyperliquid` | Hyperliquid over the public API (read-only): perp + spot markets, orderbooks, candles, funding, per-address portfolio views (positions/balances/orders/fills/PnL), and real-time settlement watching over WebSocket | `markets`, `spot_markets`, `price`, `orderbook`, `candles`, `funding`, `portfolio`, `open_orders`, `fills`, `order_status`, `ledger`, `await_settlement`, `info_query` |
 | `services/aave` | Aave v4 over the official AaveKit API (Ethereum hub-and-spoke): markets + reserves with live APYs/caps, per-address portfolio (positions, earned interest, health factor, borrowing power), wallet balances with best yield, activity history, health-factor previews, and construction-only supply/withdraw/borrow/repay/collateral-toggle transactions the USER signs | `markets`, `reserves`, `portfolio`, `balances`, `activities`, `preview`, `build_supply`, `build_withdraw`, `build_borrow`, `build_repay`, `build_collateral_toggle`, `check_transaction`, `graphql_query` |
 | `services/cow` | CoW Protocol over the public order-book API (8 chains): swap quotes, EIP-712 order construction (swaps + LIMIT orders the USER signs — no keys held), signed-order submission + gasless cancellation, per-address order/trade/portfolio views, solver competition, and the official CoW docs bundled + searchable offline | `chains`, `quote`, `build_swap_order`, `build_limit_order`, `submit_order`, `cancel_orders`, `order_status`, `user_orders`, `user_trades`, `portfolio`, `native_price`, `solver_competition`, `api_get`, `docs_search`, `docs_page` |
+| `services/near-intents` | Cross-chain swaps over the official NEAR Intents 1Click API (~190 assets, ~35 chains — USDC Base→Arbitrum, ETH→SOL, USDC→BTC…): dry-run quotes, then ONE unsigned deposit transfer the USER signs on any of 9 EVM origin chains; solvers deliver on the destination chain automatically, tracked to SUCCESS with explorer links. Every response narrates the flow step-by-step | `how_it_works`, `chains`, `tokens`, `quote`, `build_swap`, `submit_deposit_tx`, `check_status`, `await_completion` |
 
 ## Develop
 
@@ -41,6 +42,9 @@ public hub/sequencer), `HYPERLIQUID_API_URL` / `HYPERLIQUID_WS_URL`
 testnet), `COW_API_URL` (cow; defaults to https://api.cow.fi — point at
 https://barn.api.cow.fi for staging), `AAVE_API_URL` (aave; defaults to
 https://api.v4.aave.com/graphql — the official AaveKit API),
+`NEAR_INTENT_API_KEY` / `ONECLICK_API_URL` (near-intents; the 1Click JWT —
+works without it but 1Click then adds a 0.2% keyless fee per swap — and the
+API base, default https://1click.chaindefuser.com),
 `RATE_LIMIT_PER_MINUTE` (default 60/IP).
 
 ## Shared kit

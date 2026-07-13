@@ -11,6 +11,9 @@ describe("chain resolution", () => {
     expect(resolveChain("polygon").key).toBe("pol");
     expect(resolveChain("matic").key).toBe("pol");
     expect(resolveChain("binance").key).toBe("bsc");
+    expect(resolveChain("robinhood").key).toBe("rh");
+    expect(resolveChain("Robinhood Chain").key).toBe("rh");
+    expect(resolveChain("4663").key).toBe("rh");
   });
 
   it("rejects unknown chains with the covered list", () => {

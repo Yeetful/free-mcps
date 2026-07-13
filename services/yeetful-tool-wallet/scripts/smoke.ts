@@ -28,7 +28,7 @@ async function main() {
     process.exit(1);
   }
 
-  await check("portfolio (all 9 chains, one call)", async () => {
+  await check("portfolio (all 10 chains, one call)", async () => {
     const p = await getPortfolio({ owner: OWNER, chains: resolveChains() });
     return {
       pass: p.kind === "portfolio" && p.holdings.length > 0 && p.totalUsd > 0,

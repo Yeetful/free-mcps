@@ -1,8 +1,8 @@
 // The chains this service covers — the top EVM ecosystems Alchemy's Data API
-// serves on one key (probed live 2026-07-09: all nine return balances in a
-// single tokens/by-address call). Every tool speaks friendly names AND
-// Alchemy network slugs; note Alchemy REQUESTS "polygon-mainnet" but its
-// RESPONSES say "matic-mainnet" — both map to `pol` here.
+// serves on one key (probed live 2026-07-09, Robinhood Chain 2026-07-13: all
+// return balances in a single tokens/by-address call). Every tool speaks
+// friendly names AND Alchemy network slugs; note Alchemy REQUESTS
+// "polygon-mainnet" but its RESPONSES say "matic-mainnet" — both map to `pol`.
 
 export interface WalletChain {
   /** Short key used in tool args ("base", "arb", …). */
@@ -26,6 +26,7 @@ export const CHAINS: WalletChain[] = [
   { key: "avax", net: "avax-mainnet", label: "Avalanche", native: "AVAX", explorerTx: "https://snowtrace.io/tx/", explorerAddress: "https://snowtrace.io/address/" },
   { key: "scroll", net: "scroll-mainnet", label: "Scroll", native: "ETH", explorerTx: "https://scrollscan.com/tx/", explorerAddress: "https://scrollscan.com/address/" },
   { key: "gnosis", net: "gnosis-mainnet", label: "Gnosis", native: "xDAI", explorerTx: "https://gnosisscan.io/tx/", explorerAddress: "https://gnosisscan.io/address/" },
+  { key: "rh", net: "robinhood-mainnet", label: "Robinhood Chain", native: "ETH", explorerTx: "https://robinhoodchain.blockscout.com/tx/", explorerAddress: "https://robinhoodchain.blockscout.com/address/" },
 ];
 
 const ALIASES: Record<string, string> = {
@@ -41,6 +42,8 @@ const ALIASES: Record<string, string> = {
   binance: "bsc",
   avalanche: "avax",
   xdai: "gnosis",
+  robinhood: "rh",
+  "robinhood chain": "rh",
 };
 
 const CHAIN_IDS: Record<string, string> = {
@@ -53,6 +56,7 @@ const CHAIN_IDS: Record<string, string> = {
   "43114": "avax",
   "534352": "scroll",
   "100": "gnosis",
+  "4663": "rh",
 };
 
 const BY_KEY = new Map(CHAINS.map((c) => [c.key, c]));

@@ -1,0 +1,180 @@
+/* Live smoke against real Robinhood Chain contracts + the Morpho API —
+ * ZERO-SPEND by construction: reads and transaction *preparation* only,
+ * calldata is never sent anywhere. Run before calling a deploy done:
+ *
+ *   pnpm smoke [address]
+ *
+ * The optional address is the probe wallet (default: vitalik.eth — expected
+ * to be EMPTY on this chain, which also exercises the honest-refusal paths).
+ * Verifies every registry pin: each token's decimals() on-chain, each
+ * Chainlink feed's description() + freshness, Morpho market params, a live
+ * v4 quote, and every build path (artifact or honest refusal).
+ */
+
+import { FEED_ABI, TOKEN_ABI, readRetry, rpc } from "../lib/chain";
+import { morphoReads, marketParamsOf } from "../lib/morpho";
+import { reads } from "../lib/reads";
+import { FALLBACK_MARKET_IDS, TOKENS, USDG } from "../lib/registry";
+import { swap } from "../lib/swap";
+import { builds, type SendTransactionAction } from "../lib/tx";
+
+const PROBE = (process.argv[2] ?? "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045") as `0x${string}`;
+
+let failures = 0;
+async function check(name: string, fn: () => Promise<string | void>) {
+  try {
+    const note = await fn();
+    console.log(`  ✅ ${name}${note ? ` — ${note}` : ""}`);
+  } catch (e) {
+    failures++;
+    console.log(`  ❌ ${name} — ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+const assert = (cond: unknown, msg: string) => {
+  if (!cond) throw new Error(msg);
+};
+
+type Result = { ok: boolean; status: number; data: unknown };
+const assertRefusal = (res: Result, needle: string) => {
+  assert(!res.ok, `expected an honest refusal, got ok:true`);
+  assert(typeof res.data === "string" && res.data.includes(needle), `refusal text missing "${needle}": ${res.data}`);
+};
+
+async function main() {
+  console.log(`\nRobinhood Chain MCP smoke — probe ${PROBE}\n`);
+  const client = rpc();
+
+  console.log("chain + registry pins");
+  await check("chain_info reads a live block", async () => {
+    const res = (await reads.chainInfo()) as Result;
+    assert(res.ok, "chain_info failed");
+    const block = (res.data as { latestBlock: string | null }).latestBlock;
+    assert(block && BigInt(block) > 0n, "no live block number");
+    return `block ${block}`;
+  });
+
+  for (const t of TOKENS) {
+    await check(`${t.symbol} pins verify (decimals${t.feed ? " + feed" : ""})`, async () => {
+      const dec = await readRetry(() => client.readContract({ address: t.address, abi: TOKEN_ABI, functionName: "decimals" }));
+      assert(Number(dec) === t.decimals, `registry says ${t.decimals} decimals, chain says ${dec}`);
+      if (!t.feed) return "no feed listed";
+      const [description, round] = await Promise.all([
+        readRetry(() => client.readContract({ address: t.feed!, abi: FEED_ABI, functionName: "description" })),
+        readRetry(() => client.readContract({ address: t.feed!, abi: FEED_ABI, functionName: "latestRoundData" })),
+      ]);
+      // Feed branding: "Robinhood AAPL / USD", "ETH / USD", "Robinhood SGOV-USD",
+      // and the one ticker mismatch CUSO → "Robinhood USO / USD".
+      const expect = t.symbol === "CUSO" ? "USO" : t.symbol === "WETH" ? "ETH" : t.symbol;
+      assert(description.toUpperCase().includes(expect.toUpperCase()), `feed description "${description}" doesn't mention ${expect}`);
+      const [, answer, , updatedAt] = round;
+      assert(answer > 0n, `feed answered ${answer}`);
+      const ageH = (Date.now() / 1000 - Number(updatedAt)) / 3600;
+      assert(ageH < 25, `feed is ${ageH.toFixed(1)}h old (heartbeat 24h)`);
+      return `$${(Number(answer) / 1e8).toFixed(2)} (${description}, ${ageH.toFixed(1)}h old)`;
+    });
+  }
+
+  console.log("\nreads");
+  await check("prices board", async () => {
+    const res = (await reads.prices({})) as Result;
+    assert(res.ok, String(res.data));
+    const priced = (res.data as { prices: Array<{ usd: number | null }> }).prices.filter((p) => p.usd != null);
+    assert(priced.length >= 20, `only ${priced.length} tokens priced`);
+    return `${priced.length} tokens priced`;
+  });
+
+  await check("portfolio (probe wallet)", async () => {
+    const res = (await reads.portfolio({ user: PROBE })) as Result;
+    assert(res.ok, String(res.data));
+    const d = res.data as { kind: string; totalUsd: number; holdings: unknown[] };
+    assert(d.kind === "portfolio", "missing rich-card kind");
+    return `${d.holdings.length} holding(s), $${d.totalUsd}`;
+  });
+
+  await check("token_info TSLA (multiplier state)", async () => {
+    const res = (await reads.tokenInfo({ token: "TSLA" })) as Result;
+    assert(res.ok, String(res.data));
+    const d = res.data as { price: { usd: number | null }; corporateActions?: { uiMultiplier: string } };
+    assert(d.price.usd != null || d.corporateActions != null, "no price and no multiplier state");
+    return `$${d.price.usd} · uiMultiplier ${d.corporateActions?.uiMultiplier ?? "n/a"}`;
+  });
+
+  console.log("\nMorpho");
+  for (const id of FALLBACK_MARKET_IDS) {
+    await check(`pinned market ${id.slice(0, 10)}… exists on-chain`, async () => {
+      const params = await marketParamsOf(id);
+      assert(params.loanToken !== "0x0000000000000000000000000000000000000000", "market params empty");
+      return `loan ${params.loanToken.slice(0, 8)}… lltv ${(Number(params.lltv) / 1e16).toFixed(1)}%`;
+    });
+  }
+
+  await check("lending_markets (API path)", async () => {
+    const res = (await morphoReads.markets({ includeUnlisted: true })) as Result;
+    assert(res.ok, String(res.data));
+    const markets = (res.data as { markets: Array<{ loan: string }> }).markets;
+    assert(markets.length >= 3, `only ${markets.length} markets`);
+    return `${markets.length} markets, top loan asset ${markets[0].loan}`;
+  });
+
+  await check("lending_position (probe wallet)", async () => {
+    const res = (await morphoReads.position({ user: PROBE })) as Result;
+    assert(res.ok, String(res.data));
+    return (res.data as { summary: string }).summary;
+  });
+
+  console.log("\ntrading (Uniswap v4)");
+  await check("quote 100 USDG → AAPL", async () => {
+    const res = (await swap.quote({ sellToken: "USDG", buyToken: "AAPL", amount: "100" })) as Result;
+    assert(res.ok, String(res.data));
+    const d = res.data as { buy: string; pool: { fee: string }; feedCheck?: { divergence: string } };
+    return `${d.buy} @ pool ${d.pool.fee}${d.feedCheck ? `, ${d.feedCheck.divergence} off Chainlink` : ""}`;
+  });
+
+  await check("quote TSLA → USDG (sell side)", async () => {
+    const res = (await swap.quote({ sellToken: "TSLA", buyToken: "USDG", amount: "1" })) as Result;
+    assert(res.ok, String(res.data));
+    return (res.data as { buy: string }).buy;
+  });
+
+  await check("build_swap refuses the empty probe wallet honestly", async () => {
+    const res = (await swap.build({ user: PROBE, sellToken: "USDG", buyToken: "AAPL", amount: "100" })) as Result;
+    assertRefusal(res, "Insufficient");
+  });
+
+  console.log("\nlending builds (honest refusals on the empty probe)");
+  const marketId = FALLBACK_MARKET_IDS[3]; // USDG / TSLA
+  await check("build_lend refuses over-balance", async () => {
+    assertRefusal((await builds.lend({ user: PROBE, marketId, amount: "1000000" })) as Result, "Insufficient");
+  });
+  await check("build_borrow refuses with no collateral", async () => {
+    assertRefusal((await builds.borrow({ user: PROBE, marketId, amount: "10" })) as Result, "No collateral");
+  });
+  await check("build_repay refuses with no debt", async () => {
+    assertRefusal((await builds.repay({ user: PROBE, marketId, amount: "max" })) as Result, "Nothing to repay");
+  });
+
+  console.log("\nbridge");
+  await check("bridge_info", async () => {
+    const res = (await builds.bridgeInfo()) as Result;
+    assert(res.ok, "bridge_info failed");
+  });
+  await check("build_bridge_deposit builds an L1 (chainId 1) artifact", async () => {
+    const res = (await builds.bridgeDeposit({ user: PROBE, amount: "0.01" })) as Result;
+    assert(res.ok, String(res.data));
+    const steps = (res.data as { steps: SendTransactionAction[] }).steps;
+    assert(steps.length === 1 && steps[0].tx.chainId === 1, "expected one chainId-1 step");
+    assert(steps.every((s) => s.action === "send_transaction"), "bad action type");
+  });
+  await check("build_bridge_withdraw refuses the empty probe honestly", async () => {
+    assertRefusal((await builds.bridgeWithdraw({ user: PROBE, amount: "1" })) as Result, "Insufficient ETH on Robinhood Chain");
+  });
+
+  console.log(`\n${failures === 0 ? "✅ smoke clean" : `❌ ${failures} failure(s)`}\n`);
+  process.exit(failures === 0 ? 0 : 1);
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

@@ -248,7 +248,7 @@ export function registerRobinhoodTools(server: Server): void {
     {
       title: "Build: Swap Stock Tokens",
       description:
-        "Prepare an UNSIGNED Uniswap v4 swap on Robinhood Chain — buy or sell tokenized stocks against USDG (or any quoted pair). Returns 1–3 steps (exact-amount Permit2 approvals only when live allowances are short, then ONE Universal Router swap whose output credits the signer). Every build is re-decoded and guard-verified before it's returned; balances checked first. 'Buy AAPL with 500 USDG'.",
+        "Prepare an UNSIGNED Uniswap v4 swap on Robinhood Chain — buy or sell tokenized stocks against USDG (or any quoted pair). Returns 1–3 steps (exact-amount Permit2 approvals only when live allowances are short, then ONE Universal Router swap whose output credits the signer). Every build is re-decoded and guard-verified before it's returned; balances checked first, and pools that quote but only execute through Robinhood's own backend-signed venue are refused with no artifact (relay that refusal honestly — the user must trade those in Robinhood's app). 'Buy AAPL with 500 USDG'.",
       inputSchema: {
         user: userArg,
         sellToken: tokenArg.describe("Token to sell."),

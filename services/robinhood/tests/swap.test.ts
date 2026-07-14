@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { decodeFunctionData } from "viem";
 import { UNIVERSAL_ROUTER_ABI, setRpcForTests } from "@/lib/chain";
 import { PERMIT2, UNIVERSAL_ROUTER, resolveToken } from "@/lib/registry";
-import { guardV4Build, swap } from "@/lib/swap";
+import { guardV4Build, probeV4Executability, swap, type V4SwapPlan } from "@/lib/swap";
 import type { SendTransactionAction } from "@/lib/tx";
-import { fakeClient, feedRound, type FakeCall } from "./fake-rpc";
+import { fakeClient, feedRound, revertWithData, type FakeCall, type FakeChainState } from "./fake-rpc";
 
 const USER = "0x1111111111111111111111111111111111111111" as const;
 const USDG = resolveToken("USDG")!;
@@ -18,7 +18,9 @@ const quoterSim = (c: FakeCall) => {
   throw new Error("no pool");
 };
 
-function swapFake(opts: { balance?: bigint; erc20Allowance?: bigint; permit2Allowance?: [bigint, bigint, bigint] } = {}) {
+function swapFake(
+  opts: { balance?: bigint; erc20Allowance?: bigint; permit2Allowance?: [bigint, bigint, bigint]; ethCall?: FakeChainState["ethCall"] } = {},
+) {
   return fakeClient({
     reads: {
       balanceOf: opts.balance ?? 1_000_000_000n, // 1000 USDG
@@ -30,6 +32,13 @@ function swapFake(opts: { balance?: bigint; erc20Allowance?: bigint; permit2Allo
         c.address.toLowerCase() === USDG.feed!.toLowerCase() ? feedRound(1) : feedRound(250),
     },
     simulations: { quoteExactInputSingle: quoterSim },
+    // Default probe answer: a HEALTHY pool — the SWAP action reverts WITH
+    // data (CurrencyNotSettled-style), which means executable.
+    ethCall:
+      opts.ethCall ??
+      (() => {
+        throw revertWithData("0x5212cba1");
+      }),
   });
 }
 
@@ -86,6 +95,66 @@ describe("build_swap", () => {
     const res = await swap.build({ user: USER, sellToken: "USDG", buyToken: "AAPL", amount: "500" });
     expect(res.ok).toBe(false);
     expect(res.data).toContain("Insufficient USDG");
+  });
+});
+
+describe("the executability probe (venue-gated stock pools)", () => {
+  const plan = (): V4SwapPlan => ({
+    poolKey: {
+      currency0: (USDG.address.toLowerCase() < AAPL.address.toLowerCase() ? USDG.address : AAPL.address) as `0x${string}`,
+      currency1: (USDG.address.toLowerCase() < AAPL.address.toLowerCase() ? AAPL.address : USDG.address) as `0x${string}`,
+      fee: 3000,
+      tickSpacing: 60,
+      hooks: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+    },
+    zeroForOne: USDG.address.toLowerCase() < AAPL.address.toLowerCase(),
+    amountIn: 500_000_000n,
+    minOut: 1n,
+    deadline: Math.floor(Date.now() / 1000) + 600,
+  });
+
+  it("reads a data-carrying revert as executable (viem walk chain included)", async () => {
+    setRpcForTests(swapFake());
+    expect(await probeV4Executability(plan(), USER)).toBe("ok");
+
+    // viem wraps the revert — the data sits on a cause reachable via walk().
+    const walkErr = Object.assign(new Error("execution reverted"), {
+      walk: (fn: (e: unknown) => boolean) => [{ data: "0x5212cba1" }].find(fn) ?? null,
+    });
+    setRpcForTests(swapFake({ ethCall: () => { throw walkErr; } }));
+    expect(await probeV4Executability(plan(), USER)).toBe("ok");
+  });
+
+  it("reads a bare empty revert as gated and a transport error as unknown", async () => {
+    setRpcForTests(swapFake({ ethCall: () => { throw new Error("execution reverted"); } }));
+    expect(await probeV4Executability(plan(), USER)).toBe("gated");
+
+    setRpcForTests(swapFake({ ethCall: () => { throw new Error("request timeout"); } }));
+    expect(await probeV4Executability(plan(), USER)).toBe("unknown");
+  });
+
+  it("build refuses a venue-gated pool with NO artifact, naming Robinhood's venue", async () => {
+    setRpcForTests(swapFake({ ethCall: () => { throw new Error("execution reverted"); } }));
+    const res = await swap.build({ user: USER, sellToken: "USDG", buyToken: "AAPL", amount: "500" });
+    expect(res.ok).toBe(false);
+    expect(res.status).toBe(409);
+    expect(res.data).toContain("Robinhood Chain's own backend-signed swap venue");
+    expect(JSON.stringify(res.data)).not.toContain("steps"); // nothing signable escaped
+  });
+
+  it("build fails OPEN when the probe hits transport trouble", async () => {
+    setRpcForTests(swapFake({ ethCall: () => { throw new Error("rate limit exceeded"); } }));
+    const res = await swap.build({ user: USER, sellToken: "USDG", buyToken: "AAPL", amount: "500" });
+    expect(res.ok).toBe(true);
+    expect((res.data as { steps: unknown[] }).steps).toHaveLength(3);
+  });
+
+  it("build probes BEFORE emitting anything — the eth_call precedes the artifact", async () => {
+    const fake = swapFake();
+    setRpcForTests(fake);
+    const res = await swap.build({ user: USER, sellToken: "USDG", buyToken: "AAPL", amount: "500" });
+    expect(res.ok).toBe(true);
+    expect(fake.calls.some((c) => c.functionName === "eth_call" && c.address.toLowerCase() === UNIVERSAL_ROUTER.toLowerCase())).toBe(true);
   });
 });
 

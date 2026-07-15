@@ -30,8 +30,18 @@ export async function GET() {
       { name: "bridge_info", description: "Canonical-bridge overview: routes, timing, contracts, and what needs the bridge UI." },
       { name: "build_bridge_deposit", description: "Prepare an unsigned L1 transaction bridging ETH into Robinhood Chain (arrives in minutes)." },
       { name: "build_bridge_withdraw", description: "Prepare an unsigned withdrawal start back to Ethereum (~7-day challenge period + L1 claim)." },
+      { name: "brokerage_accounts", description: "Robinhood crypto BROKERAGE account(s): buying power, status, fee tier (bring-your-own API key)." },
+      { name: "brokerage_holdings", description: "Crypto held in the Robinhood brokerage account — total + available quantity per asset." },
+      { name: "brokerage_trading_pairs", description: "Brokerage-tradable crypto pairs with min/max order sizes and status." },
+      { name: "brokerage_best_bid_ask", description: "Live best bid/ask per pair from Robinhood's partner exchanges." },
+      { name: "brokerage_estimated_price", description: "Estimated execution price for hypothetical order sizes (pre-trade cost check)." },
+      { name: "brokerage_orders", description: "The account's crypto orders — one by id, or filtered list (symbol/side/type/state)." },
+      { name: "brokerage_build_order", description: "Step 1 of 2, read-only: validate + preview an order and mint a 5-minute confirm token. Places nothing." },
+      { name: "brokerage_submit_order", description: "Step 2 of 2: place the previewed order — REAL money; refuses without a fresh matching confirm token." },
+      { name: "brokerage_cancel_order", description: "Cancel one open brokerage order by id (best-effort — races with fills)." },
     ],
     safety:
-      "Signature-free by construction — this service only reads public state and PREPARES calldata; build_* tools return unsigned {to,data,value,chainId} transactions for the USER's wallet to sign (bridge deposits are chainId 1, everything else 4663). Swap builds are re-decoded and guard-verified against the quote before they're returned; lending builds fail closed on health factor. No keys held, nothing submitted. The connected user's address arrives via Yeetful's $USER_ADDRESS context.",
+      "Signature-free by construction — this service only reads public state and PREPARES calldata; build_* tools return unsigned {to,data,value,chainId} transactions for the USER's wallet to sign (bridge deposits are chainId 1, everything else 4663). Swap builds are re-decoded and guard-verified against the quote before they're returned; lending builds fail closed on health factor. No keys held, nothing submitted. The connected user's address arrives via Yeetful's $USER_ADDRESS context. " +
+      "BROKERAGE tools are the one exception to signature-free: they talk to the user's real Robinhood crypto account via the Crypto Trading API, authenticated with the USER'S OWN Ed25519 key pair sent per-request as x-robinhood-api-key + x-robinhood-private-key headers (never stored; env fallback is for self-hosted use only). Orders are fail-closed two-step: brokerage_build_order returns a preview + one-time confirm token, brokerage_submit_order requires that token plus the exact same params and MOVES REAL MONEY — construction and submission are never one call.",
   });
 }

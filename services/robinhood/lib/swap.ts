@@ -11,7 +11,13 @@
 //    3. v4 pulls funds through Permit2, so a sell may need up to two
 //       approvals (token→Permit2, then Permit2→Universal Router), both for
 //       EXACTLY the asked amount.
-//    4. GUARD: decode the calldata we just built and refuse unless every
+//    4. EXECUTABILITY PROBE: quoting is NOT executing. Robinhood's tokenized-
+//       stock pools price fine on the public Quoter but a direct Universal
+//       Router swap bare-reverts (empty revert data) — every real stock swap
+//       settles through Robinhood's backend-signed DexAggregator stack, not
+//       public UR calls. Simulate the SWAP action alone before building and
+//       refuse venue-gated pools honestly (fail OPEN on transport trouble).
+//    5. GUARD: decode the calldata we just built and refuse unless every
 //       field verifies (pinned router, exact amounts, quoted pool key, no
 //       hooks, zero native value). A guard failure withholds the artifact.
 //  Only no-hook pools are scanned: a hooked pool's contract can reorder
@@ -265,6 +271,59 @@ export async function quoteBest(sell: Address, buy: Address, amountIn: bigint): 
   return best;
 }
 
+// ── Executability probe ────────────────────────────────────────────────────
+
+const hasRevertData = (e: unknown): e is { data?: unknown } => !!e && typeof e === "object" && "data" in e;
+
+/** Pull the revert data off a viem error chain (walk when available). */
+function revertDataOf(err: unknown): string | undefined {
+  const walked =
+    err instanceof Error && "walk" in err && typeof (err as { walk?: unknown }).walk === "function"
+      ? (err as { walk: (fn: (e: unknown) => boolean) => unknown }).walk(hasRevertData)
+      : err;
+  return hasRevertData(walked) && typeof walked.data === "string" ? walked.data : undefined;
+}
+
+/**
+ * Can this pool actually EXECUTE a swap from a direct Universal Router call?
+ * Simulates the SWAP action alone via eth_call (no settle/take — needs no
+ * balances or allowances from `from`). A healthy pool always reverts WITH
+ * data (`CurrencyNotSettled`/`V4TooLittleReceived` — deltas are left
+ * unsettled by design); a venue-gated pool (Robinhood tokenized stocks)
+ * bare-reverts with EMPTY data before the pool math runs. Returns:
+ *   'ok'      — revert carried data (or the call somehow passed): executable
+ *   'gated'   — positive execution revert with empty data: NOT executable
+ *   'unknown' — transport trouble (timeout/rate-limit): fail OPEN rather
+ *               than block good builds on RPC flakiness.
+ */
+export async function probeV4Executability(plan: V4SwapPlan, from: Address): Promise<"ok" | "gated" | "unknown"> {
+  const swapParams = encodeAbiParameters(
+    [EXACT_IN_SINGLE_PARAM],
+    [{ poolKey: plan.poolKey, zeroForOne: plan.zeroForOne, amountIn: plan.amountIn, amountOutMinimum: plan.minOut, hookData: "0x" }],
+  );
+  const v4Input = encodeAbiParameters(
+    [...ACTIONS_ENVELOPE_PARAMS],
+    [`0x${ACTION_SWAP_EXACT_IN_SINGLE.toString(16).padStart(2, "0")}`, [swapParams]],
+  );
+  const data = encodeFunctionData({
+    abi: UNIVERSAL_ROUTER_ABI,
+    functionName: "execute",
+    args: [`0x${UR_COMMAND_V4_SWAP.toString(16).padStart(2, "0")}`, [v4Input], BigInt(plan.deadline)],
+  });
+  try {
+    await rpc().call({ account: from, to: UNIVERSAL_ROUTER, data });
+    return "ok";
+  } catch (err) {
+    const revertData = revertDataOf(err);
+    if (typeof revertData === "string" && revertData.length > 2) return "ok";
+    const msg = err instanceof Error ? err.message : "";
+    // Only a positive "execution reverted" with no data means gated — RPC
+    // flakiness must not block good builds.
+    if (/execution reverted|revert/i.test(msg)) return "gated";
+    return "unknown";
+  }
+}
+
 // ── Tool surfaces ──────────────────────────────────────────────────────────
 
 function resolvePair(sellToken: string, buyToken: string): { sell: RegistryToken; buy: RegistryToken } | RhResult {
@@ -349,6 +408,22 @@ export const swap = {
       if (minOut === 0n) return fail(400, "The quoted output rounds to zero — amount too small.");
       const deadline = Math.floor(Date.now() / 1000) + 600;
       const permit2Expiration = deadline;
+
+      // Quoting is NOT executing: Robinhood's tokenized-stock pools price on
+      // the Quoter but a direct Universal Router swap bare-reverts (their
+      // stock venue is the backend-signed DexAggregator, not public UR
+      // calls). Refuse BEFORE any signature is requested — never burn a
+      // Permit2 grant on a swap that can never land.
+      const executability = await probeV4Executability(
+        { poolKey: best.poolKey, zeroForOne: best.zeroForOne, amountIn, minOut, deadline },
+        args.user,
+      );
+      if (executability === "gated") {
+        return fail(
+          409,
+          `${sell.symbol}→${buy.symbol} quotes on Uniswap v4, but this pool is venue-gated: it only executes through Robinhood Chain's own backend-signed swap venue (the DexAggregator) — a direct Universal Router swap always reverts, so signing would burn approvals for nothing. No artifact was built; trade this pair in Robinhood's own app instead. The quote tool stays accurate for pricing.`,
+        );
+      }
 
       const steps: SendTransactionAction[] = [];
       const erc20Allowance = await readRetry(() =>

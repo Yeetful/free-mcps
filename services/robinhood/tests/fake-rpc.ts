@@ -10,6 +10,8 @@ export interface FakeChainState {
   blockNumber?: bigint;
   reads?: Record<string, unknown | ((call: FakeCall) => unknown)>;
   simulations?: Record<string, unknown | ((call: FakeCall) => unknown)>;
+  /** Raw eth_call handler (the executability probe) — throw to revert. */
+  ethCall?: (args: { account?: unknown; to: string; data: string }) => unknown;
 }
 
 export function fakeClient(state: FakeChainState) {
@@ -34,8 +36,17 @@ export function fakeClient(state: FakeChainState) {
       const result = typeof handler === "function" ? (handler as (c: FakeCall) => unknown)(call) : handler;
       return { result };
     },
+    async call(args: { account?: unknown; to: string; data: string }) {
+      this.calls.push({ address: args.to, functionName: "eth_call", args: [args.data] });
+      if (!state.ethCall) throw new Error("fake-rpc: no ethCall handler");
+      return { data: state.ethCall(args) };
+    },
   };
 }
+
+/** A healthy v4 pool's probe revert: execution reverted WITH data attached. */
+export const revertWithData = (data: `0x${string}`) =>
+  Object.assign(new Error("execution reverted"), { data });
 
 /** A fresh Chainlink latestRoundData tuple answering `usd` right now. */
 export const feedRound = (usd: number, updatedAtSec = Math.floor(Date.now() / 1000)) =>

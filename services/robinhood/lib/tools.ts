@@ -5,6 +5,7 @@ import { reads } from "./reads";
 import { morphoReads } from "./morpho";
 import { builds } from "./tx";
 import { swap } from "./swap";
+import { registerBrokerageTools } from "./brokerage-tools";
 
 function present(result: RhResult) {
   if (!result.ok) {
@@ -298,4 +299,8 @@ export function registerRobinhoodTools(server: Server): void {
     },
     async ({ user, amount, destination }) => present(await builds.bridgeWithdraw({ user: asUser(user), amount, destination })),
   );
+
+  // ── Brokerage (Robinhood Crypto Trading API — the user's real Robinhood
+  //    account; per-request credentials, two-step guarded orders) ─────────
+  registerBrokerageTools(server);
 }

@@ -10,9 +10,12 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "smoke:brokerage": "tsx --env-file-if-exists=.env.local scripts/smoke-brokerage.ts"
   },
   "dependencies": {
+    "@noble/curves": "^1.9.1",
+    "@noble/hashes": "^1.8.0",
     "@yeetful/mcp-kit": "workspace:*",
     "mcp-handler": "1.1.0",
     "next": "16.2.7",

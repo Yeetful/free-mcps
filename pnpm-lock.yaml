@@ -242,6 +242,12 @@ importers:
 
   services/robinhood:
     dependencies:
+      '@noble/curves':
+        specifier: ^1.9.1
+        version: 1.9.1
+      '@noble/hashes':
+        specifier: ^1.8.0
+        version: 1.8.0
       '@yeetful/mcp-kit':
         specifier: workspace:*
         version: link:../../packages/mcp-kit

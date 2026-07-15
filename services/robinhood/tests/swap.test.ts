@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { decodeFunctionData } from "viem";
 import { UNIVERSAL_ROUTER_ABI, setRpcForTests } from "@/lib/chain";
 import { PERMIT2, UNIVERSAL_ROUTER, resolveToken } from "@/lib/registry";
+import { setLifiFetchForTests } from "@/lib/lifi";
 import { guardV4Build, probeV4Executability, swap, type V4SwapPlan } from "@/lib/swap";
 import type { SendTransactionAction } from "@/lib/tx";
 import { fakeClient, feedRound, revertWithData, type FakeCall, type FakeChainState } from "./fake-rpc";
@@ -42,7 +43,10 @@ function swapFake(
   });
 }
 
-afterEach(() => setRpcForTests(null));
+afterEach(() => {
+  setRpcForTests(null);
+  setLifiFetchForTests(null);
+});
 
 describe("quote", () => {
   it("scans the no-hook keys, picks the best pool, and cross-checks Chainlink", async () => {
@@ -133,12 +137,16 @@ describe("the executability probe (venue-gated stock pools)", () => {
     expect(await probeV4Executability(plan(), USER)).toBe("unknown");
   });
 
-  it("build refuses a venue-gated pool with NO artifact, naming Robinhood's venue", async () => {
+  it("build refuses a venue-gated pool with NO artifact when LiFi can't fill either", async () => {
+    // Gated pools now fall through to the LiFi settlement build
+    // (tests/lifi.test.ts covers the successful fallthrough); the honest
+    // refusal survives only when LiFi has no route.
     setRpcForTests(swapFake({ ethCall: () => { throw new Error("execution reverted"); } }));
+    setLifiFetchForTests(async () => ({ ok: false, status: 404, json: async () => ({ message: "No available quotes for the requested transfer" }) }));
     const res = await swap.build({ user: USER, sellToken: "USDG", buyToken: "AAPL", amount: "500" });
     expect(res.ok).toBe(false);
     expect(res.status).toBe(409);
-    expect(res.data).toContain("Robinhood Chain's own backend-signed swap venue");
+    expect(res.data).toContain("backend-signed DexAggregator");
     expect(JSON.stringify(res.data)).not.toContain("steps"); // nothing signable escaped
   });
 

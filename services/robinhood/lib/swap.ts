@@ -15,8 +15,12 @@
 //       stock pools price fine on the public Quoter but a direct Universal
 //       Router swap bare-reverts (empty revert data) — every real stock swap
 //       settles through Robinhood's backend-signed DexAggregator stack, not
-//       public UR calls. Simulate the SWAP action alone before building and
-//       refuse venue-gated pools honestly (fail OPEN on transport trouble).
+//       public UR calls. Simulate the SWAP action alone before building;
+//       venue-gated pools fall through to the guarded LiFi settlement build
+//       (lib/lifi.ts — LiFi's router is whitelisted on the aggregator), and
+//       only when LiFi can't route either do we refuse honestly. Direct v4
+//       stays primary for any pool that probes healthy (fail OPEN on
+//       transport trouble).
 //    5. GUARD: decode the calldata we just built and refuse unless every
 //       field verifies (pinned router, exact amounts, quoted pool key, no
 //       hooks, zero native value). A guard failure withholds the artifact.
@@ -28,6 +32,7 @@
 import { decodeAbiParameters, decodeFunctionData, encodeAbiParameters, encodeFunctionData } from "viem";
 import { PERMIT2_ABI, TOKEN_ABI, UNIVERSAL_ROUTER_ABI, V4_QUOTER_ABI, readRetry, rpc } from "./chain";
 import { CHAIN_ID, PERMIT2, UNIVERSAL_ROUTER, USDG, V4_QUOTER, resolveToken, type Address, type RegistryToken } from "./registry";
+import { buildLifiSwap } from "./lifi";
 import { feedPrice } from "./reads";
 import { step, type SendTransactionAction } from "./tx";
 import { fail, formatAtoms, humanToAtoms, ok, type RhResult } from "./util";
@@ -412,17 +417,17 @@ export const swap = {
       // Quoting is NOT executing: Robinhood's tokenized-stock pools price on
       // the Quoter but a direct Universal Router swap bare-reverts (their
       // stock venue is the backend-signed DexAggregator, not public UR
-      // calls). Refuse BEFORE any signature is requested — never burn a
-      // Permit2 grant on a swap that can never land.
+      // calls). Probe BEFORE any signature is requested — never burn a
+      // Permit2 grant on a swap that can never land. Gated pools fall
+      // through to the guarded LiFi settlement build, whose router IS
+      // whitelisted on the aggregator; the honest refusal only survives
+      // when LiFi can't fill either.
       const executability = await probeV4Executability(
         { poolKey: best.poolKey, zeroForOne: best.zeroForOne, amountIn, minOut, deadline },
         args.user,
       );
       if (executability === "gated") {
-        return fail(
-          409,
-          `${sell.symbol}→${buy.symbol} quotes on Uniswap v4, but this pool is venue-gated: it only executes through Robinhood Chain's own backend-signed swap venue (the DexAggregator) — a direct Universal Router swap always reverts, so signing would burn approvals for nothing. No artifact was built; trade this pair in Robinhood's own app instead. The quote tool stays accurate for pricing.`,
-        );
+        return buildLifiSwap({ user: args.user, sell, buy, amount: args.amount, amountIn, quoterOut: best.amountOut });
       }
 
       const steps: SendTransactionAction[] = [];

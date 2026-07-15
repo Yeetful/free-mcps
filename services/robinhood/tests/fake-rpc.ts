@@ -12,6 +12,8 @@ export interface FakeChainState {
   simulations?: Record<string, unknown | ((call: FakeCall) => unknown)>;
   /** Raw eth_call handler (the executability probe) — throw to revert. */
   ethCall?: (args: { account?: unknown; to: string; data: string }) => unknown;
+  /** eth_estimateGas handler (the LiFi pre-sign simulation) — throw to revert. */
+  estimateGas?: (args: { account?: unknown; to: string; data: string }) => bigint;
 }
 
 export function fakeClient(state: FakeChainState) {
@@ -40,6 +42,10 @@ export function fakeClient(state: FakeChainState) {
       this.calls.push({ address: args.to, functionName: "eth_call", args: [args.data] });
       if (!state.ethCall) throw new Error("fake-rpc: no ethCall handler");
       return { data: state.ethCall(args) };
+    },
+    async estimateGas(args: { account?: unknown; to: string; data: string }) {
+      this.calls.push({ address: args.to, functionName: "eth_estimateGas", args: [args.data] });
+      return state.estimateGas ? state.estimateGas(args) : 100_000n;
     },
   };
 }

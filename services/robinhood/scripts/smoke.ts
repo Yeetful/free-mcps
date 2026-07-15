@@ -12,11 +12,13 @@
  */
 
 import { FEED_ABI, TOKEN_ABI, readRetry, rpc } from "../lib/chain";
+import { DEFAULT_LIFI_ROUTERS, buildLifiSwap, feeSplit } from "../lib/lifi";
 import { morphoReads, marketParamsOf } from "../lib/morpho";
 import { reads } from "../lib/reads";
-import { FALLBACK_MARKET_IDS, TOKENS, USDG } from "../lib/registry";
-import { swap } from "../lib/swap";
+import { FALLBACK_MARKET_IDS, TOKENS, USDG, resolveToken } from "../lib/registry";
+import { probeV4Executability, quoteBest, swap } from "../lib/swap";
 import { builds, type SendTransactionAction } from "../lib/tx";
+import { humanToAtoms } from "../lib/util";
 
 const PROBE = (process.argv[2] ?? "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045") as `0x${string}`;
 
@@ -141,6 +143,52 @@ async function main() {
     const res = (await swap.build({ user: PROBE, sellToken: "USDG", buyToken: "AAPL", amount: "100" })) as Result;
     assertRefusal(res, "Insufficient");
   });
+
+  // ── LiFi settlement fallback (venue-gated stock pools) ───────────────────
+  // build_swap's balance gate correctly refuses the empty probe wallet before
+  // the venue logic runs, so the LiFi path is exercised through its own
+  // builder here — the exact code build_swap falls through to on "gated".
+  // Read-only + construction-only: nothing is signed, sent, or spent.
+  for (const symbol of ["AAPL", "NVDA"] as const) {
+    await check(`LiFi builds 100 USDG → ${symbol} (gated-pool settlement, fee + guard)`, async () => {
+      const buy = resolveToken(symbol);
+      assert(buy, `${symbol} missing from the registry`);
+      const amountIn = humanToAtoms("100", 6)!;
+      const best = await quoteBest(USDG, buy!.address, amountIn);
+      assert(best, `no v4 quote for USDG→${symbol}`);
+      const gate = await probeV4Executability(
+        { poolKey: best!.poolKey, zeroForOne: best!.zeroForOne, amountIn, minOut: 1n, deadline: Math.floor(Date.now() / 1000) + 600 },
+        PROBE,
+      );
+      const res = (await buildLifiSwap({
+        user: PROBE,
+        sell: resolveToken("USDG")!,
+        buy: buy!,
+        amount: "100",
+        amountIn,
+        quoterOut: best!.amountOut,
+      })) as Result;
+      assert(res.ok, String(res.data));
+      const d = res.data as {
+        steps: SendTransactionAction[];
+        fee: { bps: number; amount: string };
+        guard: string;
+        simulation: string;
+        validUntil: string;
+        buyEstimate: string;
+      };
+      assert(d.guard.includes("passed"), `guard did not pass: ${d.guard}`);
+      const { feeAtoms } = feeSplit(amountIn);
+      assert(d.fee.amount === "0.2 USDG" && feeAtoms === 200_000n, `fee should be 0.2 USDG (20 bps of 100), got ${d.fee.amount}`);
+      assert(d.steps.every((s) => s.action === "send_transaction" && s.tx.chainId === 4663 && s.tx.value === "0"), "bad step shape");
+      const swapStep = d.steps.find((s) => s.label.includes("via LiFi"))!;
+      assert(DEFAULT_LIFI_ROUTERS.some((r) => r.toLowerCase() === swapStep.tx.to.toLowerCase()), `swap step targets non-allowlisted ${swapStep.tx.to}`);
+      assert(new Date(d.validUntil).getTime() > Date.now(), "validUntil already passed");
+      // the balance-less probe holds no allowance → simulation must be skipped, flagged
+      assert(d.simulation.includes("skipped"), `expected skipped simulation for the empty probe, got: ${d.simulation}`);
+      return `direct v4 probes ${gate}; ${d.steps.length} steps → ${d.buyEstimate}, fee ${d.fee.amount}, sim ${d.simulation.split(" — ")[0]}`;
+    });
+  }
 
   console.log("\nlending builds (honest refusals on the empty probe)");
   const marketId = FALLBACK_MARKET_IDS[3]; // USDG / TSLA

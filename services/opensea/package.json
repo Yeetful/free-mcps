@@ -1,0 +1,32 @@
+{
+  "name": "opensea-mcp-free",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenSea NFTs as a FREE (non-gated) MCP service: wallet NFT portfolios with images across Ethereum/Base/Arbitrum, NFT + collection detail, floor prices and stats, live listings and best offers, and construction-only NFT transactions — ERC-721 and ERC-1155 transfers, Seaport 1.6 sell listings (EIP-712 order the USER signs, then a guarded relay to OpenSea), listing cancels, and guarded buys of live listings. Ownership is verified on-chain before any build; this service never signs or submits transactions.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "smoke": "tsx --env-file-if-exists=.env.local scripts/smoke.ts"
+  },
+  "dependencies": {
+    "@yeetful/mcp-kit": "workspace:*",
+    "mcp-handler": "1.1.0",
+    "next": "16.2.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "viem": "^2.21.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

@@ -14,6 +14,7 @@ The website directory rows are already seeded on Neon pointing at these hosts:
 | yeetful-tool-wallet | `services/yeetful-tool-wallet` | `wallet-mcp.yeetful.com` (not yet deployed/seeded) |
 | lido | `services/lido` | `lido-mcp.yeetful.com` (not yet deployed/seeded) |
 | robinhood | `services/robinhood` | `robinhood-mcp.yeetful.com` (not yet deployed/seeded) |
+| opensea | `services/opensea` | `opensea-mcp.yeetful.com` (not yet deployed/seeded) |
 
 ## Steps (per service, ~3 min)
 
@@ -35,6 +36,10 @@ The website directory rows are already seeded on Neon pointing at these hosts:
    - `ALCHEMY_API_KEY` (robinhood, **recommended for prod** — upgrades the
      chain-4663 RPC from the rate-limited public endpoint to Alchemy's
      `robinhood-mainnet`; `ROBINHOOD_RPC_URL` overrides both)
+   - `OPENSEA_API_KEY` (opensea, **REQUIRED** — every read + the listing
+     relay goes through api.opensea.io; same value as `OPENSEA_API_KEY` in
+     website/.env.local. `ETH_RPC_URL`/`BASE_RPC_URL`/`ARBITRUM_RPC_URL`
+     optional overrides for the publicnode defaults.)
    - `RATE_LIMIT_PER_MINUTE` (default 60/IP)
 4. Deploy, then add the custom domain above (Settings → Domains; DNS CNAME →
    `cname.vercel-dns.com`).
@@ -52,14 +57,14 @@ Both services are DEPLOYED and live (2026-07-03) — prod chat calls them
 directly. To develop against local copies instead, in `website/.env.local`:
 
 ```
-FREE_MCP_URL_OVERRIDES={"uniswap-mcp.yeetful.com":"http://localhost:3261","snapshot-mcp.yeetful.com":"http://localhost:3262","cow-mcp.yeetful.com":"http://localhost:3263","aave-mcp.yeetful.com":"http://localhost:3266","near-intents-mcp.yeetful.com":"http://localhost:3268","wallet-mcp.yeetful.com":"http://localhost:3269","lido-mcp.yeetful.com":"http://localhost:3270","robinhood-mcp.yeetful.com":"http://localhost:3271"}
+FREE_MCP_URL_OVERRIDES={"uniswap-mcp.yeetful.com":"http://localhost:3261","snapshot-mcp.yeetful.com":"http://localhost:3262","cow-mcp.yeetful.com":"http://localhost:3263","aave-mcp.yeetful.com":"http://localhost:3266","near-intents-mcp.yeetful.com":"http://localhost:3268","wallet-mcp.yeetful.com":"http://localhost:3269","lido-mcp.yeetful.com":"http://localhost:3270","robinhood-mcp.yeetful.com":"http://localhost:3271","opensea-mcp.yeetful.com":"http://localhost:3272"}
 ```
 
 and run the services locally (`next start -p 3261` in services/uniswap,
 `-p 3262` in services/snapshot, `-p 3263` in services/cow, `-p 3266` in
 services/aave, `-p 3268` in services/near-intents, `-p 3269` in
 services/yeetful-tool-wallet, `-p 3270` in services/lido, `-p 3271` in
-services/robinhood), or run the
+services/robinhood, `-p 3272` in services/opensea), or run the
 standing proof: `npx tsx scripts/test-free-mcps-live.ts` (in website/, env as
 above).
 

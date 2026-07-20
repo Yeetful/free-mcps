@@ -13,14 +13,16 @@ import { createMcpHandler } from "mcp-handler";
  */
 export function createCleanMcpHandler(
   register: Parameters<typeof createMcpHandler>[0],
-  opts: { maxDuration?: number; verboseLogs?: boolean } = {},
+  opts: { maxDuration?: number; verboseLogs?: boolean; basePath?: string } = {},
 ) {
   return createMcpHandler(
     register,
     {},
     {
       // Empty basePath → the route lives at app/[transport] → public `/mcp`.
-      basePath: "",
+      // A service's paid door passes basePath "/paid" with the route at
+      // app/paid/[transport] → public `/paid/mcp`, same tools.
+      basePath: opts.basePath ?? "",
       maxDuration: opts.maxDuration ?? 60,
       verboseLogs: opts.verboseLogs ?? process.env.NODE_ENV !== "production",
     },

@@ -6,7 +6,14 @@ export default defineConfig({
     alias: { "@": path.resolve(__dirname, "./") },
   },
   ssr: {
-    noExternal: ["@yeetful/mcp-kit"],
+    noExternal: [
+      "@yeetful/mcp-kit",
+      "@x402/next",
+      "@x402/core",
+      "@x402/evm",
+      "@x402/extensions",
+      "@coinbase/x402",
+    ],
   },
   test: {
     environment: "node",
@@ -16,7 +23,15 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     server: {
       deps: {
-        inline: ["@yeetful/mcp-kit", "next"],
+        inline: [
+          "@yeetful/mcp-kit",
+          "@x402/next",
+          "@x402/core",
+          "@x402/evm",
+          "@x402/extensions",
+          "@coinbase/x402",
+          "next",
+        ],
       },
     },
   },

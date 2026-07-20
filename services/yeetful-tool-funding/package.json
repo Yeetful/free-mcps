@@ -2,7 +2,7 @@
   "name": "yeetful-tool-funding",
   "version": "0.1.0",
   "private": true,
-  "description": "Yeetful internal tool (yeetful-tool-* fleet): the universal funding planner as a FREE (non-gated) MCP service — scan a wallet's movable ETH + USDC across Base/Arbitrum/Ethereum and turn any insufficient-funds refusal into an executable cross-chain funding plan (NEAR Intents legs, destination gas included). Construction-only — never signs, never submits, never touches funds.",
+  "description": "Yeetful internal tool (yeetful-tool-* fleet): the universal funding planner as an MCP service with TWO front doors serving identical tools — /mcp free + rate-limited, /paid/mcp x402 pay-per-call with no throttle. Scan a wallet's movable ETH + USDC across Base/Arbitrum/Ethereum and turn any insufficient-funds refusal into an executable cross-chain funding plan (NEAR Intents legs, destination gas included) or a full fund_and_build runbook. Construction-only — never signs, never submits, never touches funds.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { createMcpHandler } from "mcp-handler";
 import { ethUsd, FUNDING_CHAINS } from "./chains";
 import { planFunding, scanFundingSources } from "./plan";
+import { buildRunbook } from "./runbook";
 
 function ok(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload) }] };
@@ -75,6 +76,39 @@ export function registerFundingTools(server: Server): void {
         const dest = FUNDING_CHAINS.find((c) => String(c.chainId) === chain.trim() || c.word.toLowerCase() === chain.trim().toLowerCase() || c.key === chain.trim().toLowerCase());
         if (!dest) throw new Error(`Unknown destination "${chain}" — covered: ${CHAIN_LIST}. (Robinhood Chain funding rides the robinhood MCP's LiFi plan.)`);
         return planFunding(user as `0x${string}`, { chainId: dest.chainId, token, amount });
+      }),
+  );
+
+  server.registerTool(
+    "fund_and_build",
+    {
+      title: "Fund & Build (one-call runbook)",
+      description:
+        "The ONE-CALL composite for agents that can sign but can't orchestrate: scan + plan + an executable RUNBOOK in a single response. Call when an action refused on insufficient funds and you want the exact ordered tool calls, not just a plan. Returns everything plan_funding returns PLUS `runbook.steps` — numbered steps naming the NEAR Intents MCP tool for each leg (build_swap with verbatim params → submit_deposit_tx → await_completion) and ending with your follow-up action. Execute the steps in order, signing each deposit transfer with the user's own wallet; deposit addresses come from build_swap's responses, NEVER invented. Pass the action the funding is for as `finalAction` so the last step says what to do once funds land. Construction-only: this tool reads and plans; it cannot sign, submit, or move anything. Pass user=\"$USER_ADDRESS\" for the connected user.",
+      inputSchema: {
+        user: userArg,
+        chain: z.string().describe(`Destination chain — name or EVM chainId (${CHAIN_LIST}).`),
+        token: z.string().describe('The token that must LAND on the destination ("ETH", "USDC", …).'),
+        amount: z.number().positive().describe("The SHORTFALL in token units: how much more must land there (needed minus currently held)."),
+        finalAction: z.string().max(300).optional().describe('Optional: the action this funding is FOR ("supply 12 USDC to Aave on Arbitrum") — echoed into the runbook\'s final step and the yeetfulResume sentence.'),
+      },
+    },
+    async ({ user, chain, token, amount, finalAction }) =>
+      guarded(async () => {
+        const dest = FUNDING_CHAINS.find((c) => String(c.chainId) === chain.trim() || c.word.toLowerCase() === chain.trim().toLowerCase() || c.key === chain.trim().toLowerCase());
+        if (!dest) throw new Error(`Unknown destination "${chain}" — covered: ${CHAIN_LIST}. (Robinhood Chain funding rides the robinhood MCP's LiFi plan.)`);
+        const result = await planFunding(user as `0x${string}`, { chainId: dest.chainId, token, amount });
+        if (result.plan.kind === "short") return { ...result, runbook: null };
+        const primary = result.plan.options[0]!;
+        return {
+          ...result,
+          runbook: {
+            option: primary.label,
+            steps: buildRunbook(primary, finalAction),
+            otherOptions: result.plan.options.slice(1).map((o) => o.label),
+            yeetfulResume: finalAction ? `${primary.yeetfulResume}, then ${finalAction}` : primary.yeetfulResume,
+          },
+        };
       }),
   );
 

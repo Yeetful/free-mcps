@@ -5,6 +5,7 @@
 // shortfall path end-to-end).
 import { ethUsd } from "../lib/chains";
 import { planFunding, scanFundingSources } from "../lib/plan";
+import { buildRunbook } from "../lib/runbook";
 
 const USER = (process.argv[2] ?? "0x5EaaBd731d2Bc0490C2D47e41858e9b0629455a0") as `0x${string}`;
 
@@ -63,6 +64,21 @@ async function main() {
       (e: Error) => e.message,
     );
     return { pass: !!res && /price/i.test(res), detail: res?.slice(0, 80) ?? "did not throw" };
+  });
+
+  await check("fund_and_build: a live plan compiles into an ordered runbook", async () => {
+    const res = await planFunding(USER, { chainId: 42161, token: "USDC", amount: 1 });
+    if (res.plan.kind !== "offer") {
+      return { pass: true, detail: `short (honest) — runbook path exercised by unit tests; needs ~$${res.plan.needUsd}` };
+    }
+    const steps = buildRunbook(res.plan.options[0]!, "supply 1 USDC to Aave on Arbitrum");
+    const perLeg = res.plan.options[0]!.legs.length * 3 + 1;
+    const ordered = steps.every((s, i) => s.step === i + 1);
+    const finale = steps[steps.length - 1]!;
+    return {
+      pass: steps.length === perLeg && ordered && finale.kind === "act" && finale.note.includes("Aave"),
+      detail: `${steps.length} steps for ${res.plan.options[0]!.legs.length} leg(s), finale: ${finale.note.slice(0, 60)}`,
+    };
   });
 
   console.log(failures === 0 ? "\nAll smoke checks passed." : `\n${failures} smoke check(s) failed.`);

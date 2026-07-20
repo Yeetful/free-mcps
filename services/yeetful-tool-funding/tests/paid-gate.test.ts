@@ -39,6 +39,17 @@ describe("funding paid door (x402 v2 at /paid/mcp)", () => {
     expect(bazaar?.info).toBeTruthy();
     expect(bazaar?.schema).toBeTruthy();
     expect(JSON.stringify(bazaar)).toContain("fund_and_build");
+
+    // The BODY carries the same challenge (v1-style body + v2 header):
+    // clients that parse `{}` as a valid-but-empty body must still see
+    // accepts without needing the header fallback.
+    const body = await res!.json();
+    expect(body.x402Version).toBe(2);
+    expect(Array.isArray(body.accepts)).toBe(true);
+    expect(body.accepts.length).toBeGreaterThan(0);
+    expect(body.accepts[0].payTo?.toLowerCase()).toBe(
+      accept.payTo?.toLowerCase(),
+    );
   });
 
   it("leaves the FREE door untouched — /mcp falls through with no challenge", async () => {

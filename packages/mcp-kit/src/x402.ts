@@ -182,5 +182,60 @@ export function createPaidDoorProxy(
     });
   }
 
-  return paymentProxy(routes, server);
+  const gate = paymentProxy(routes, server);
+  return async (req: NextRequest) => {
+    const res = await gate(req);
+    if (!res || res.status !== 402) return res;
+    return withChallengeBody(res);
+  };
+}
+
+/**
+ * Echo the v2 PAYMENT-REQUIRED header challenge as the 402's JSON body.
+ *
+ * @x402/next emits the full discovery document base64-encoded in the
+ * PAYMENT-REQUIRED header but ships a body of `{}`. v1-era clients (and any
+ * client that parses the body first and only header-falls-back on non-JSON —
+ * `{}` IS valid JSON) see an empty `accepts` and refuse to pay. Serving the
+ * same challenge in BOTH places makes every client generation happy.
+ */
+async function withChallengeBody(res: NextResponse): Promise<NextResponse> {
+  const header = res.headers.get("PAYMENT-REQUIRED");
+  if (!header) return res;
+
+  let body: unknown = null;
+  try {
+    body = await res.clone().json();
+  } catch {
+    /* non-JSON body → echo the header challenge */
+  }
+  if (hasUsableAccepts(body)) return res;
+
+  let challenge: unknown;
+  try {
+    challenge = decodeChallengeHeader(header);
+  } catch {
+    return res;
+  }
+  if (!hasUsableAccepts(challenge)) return res;
+
+  const headers = new Headers(res.headers);
+  headers.delete("content-length");
+  headers.delete("content-type");
+  return NextResponse.json(challenge, { status: 402, headers });
+}
+
+function hasUsableAccepts(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const accepts = (value as { accepts?: unknown }).accepts;
+  return Array.isArray(accepts) && accepts.length > 0;
+}
+
+/** Base64 → JSON, Node or edge runtime (Buffer when present, atob otherwise). */
+function decodeChallengeHeader(b64: string): unknown {
+  const json =
+    typeof Buffer !== "undefined"
+      ? Buffer.from(b64, "base64").toString("utf8")
+      : new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
+  return JSON.parse(json);
 }

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { createMcpHandler } from "mcp-handler";
 import { scanWallet } from "./scan";
 import { mintHandoff, SITE } from "./handoff";
+import { mintIntentLink } from "./mint-link";
 
 function ok(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload) }] };
@@ -53,7 +54,7 @@ export function registerHandsTools(server: Server): void {
       guarded(() => ({
         capabilities: CAPABILITIES,
         contract:
-          "Yeetful is the non-custodial back office for autonomous money: deterministic builders construct every transaction (no AI writes calldata or addresses), every build is guarded fail-closed, priced, and receipted, and the human's own wallet is the only signer. Your job as the agent: scan (scan_wallet), decide what should happen, then mint a sign link (prepare_handoff / plan_stock_buy) and hand it to your human.",
+          "Yeetful is the non-custodial back office for autonomous money: deterministic builders construct every transaction (no AI writes calldata or addresses), every build is guarded fail-closed, priced, and receipted, and the human's own wallet is the only signer. Your job as the agent: scan (scan_wallet), decide what should happen, then mint a sign link (prepare_handoff / plan_stock_buy) and hand it to your human — or PUBLISH the plan as a durable, shareable intent link (mint_intent_link, needs your operator's yf_ API key).",
         handoff: `Sign links look like ${SITE}/sign?ask=<sentence> — the ask travels as a sentence and is rebuilt from scratch on Yeetful's side.`,
       })),
   );
@@ -82,6 +83,28 @@ export function registerHandsTools(server: Server): void {
       },
     },
     async ({ ask, agent, mcps }) => guarded(() => mintHandoff(ask, { agent, mcps })),
+  );
+
+  server.registerTool(
+    "mint_intent_link",
+    {
+      title: "Publish a Plan as an Intent Link (durable, shareable)",
+      description:
+        "Mint a REAL, durable yeetful.com/i/<slug> intent link carrying your ask — the shareable version of prepare_handoff. Whoever opens it (anyone, forever, until revoked) faces an explicit Connect & build consent step; Yeetful rebuilds the ask from scratch through its guarded builders and the visitor's own wallet is the only signer. The creator on record is your OPERATOR (the owner of the yf_ API key — from yeetful.com/dashboard), who gets the open→connect→build→sign funnel and any conversion earnings on their dashboard, and can revoke anytime. Optional redirect_url (public https) sends signers back to a site afterwards — never automatically, only via a post-signature button. This call returns no transaction material.",
+      inputSchema: {
+        ask: z.string().min(8).max(400).describe("The action as one plain-English sentence, amounts included ('Buy $10 of AAPL', 'DCA $25 into ETH weekly')."),
+        api_key: z
+          .string()
+          .regex(/^yf_[0-9a-f]{64}$/)
+          .optional()
+          .describe("Your operator's Yeetful API key (yf_…). Optional when the service is deployed with YEETFUL_API_KEY set."),
+        redirect_url: z.string().url().optional().describe("Public https URL signers are offered a return button to after signing (e.g. your operator's site)."),
+        agent: z.string().max(40).optional().describe('Who prepared this — shown as the byline on the link page (e.g. "Claude").'),
+        mcps: z.array(z.string()).max(4).optional().describe('Optional free-fleet slugs to attach (e.g. ["robinhood-free"]). Omit when unsure — the composer decides from the ask.'),
+      },
+    },
+    async ({ ask, api_key, redirect_url, agent, mcps }) =>
+      guarded(() => mintIntentLink(ask, { apiKey: api_key, redirectUrl: redirect_url, agent, mcps })),
   );
 
   server.registerTool(

@@ -82,7 +82,7 @@ export function registerRobinhoodTools(server: Server): void {
     {
       title: "Robinhood Chain Info",
       description:
-        "Robinhood Chain (chain id 4663) at a glance: the Arbitrum-Orbit stack, RPC/explorer endpoints, and where each protocol lives — Uniswap v4 for stock-token trading, Morpho for lending, the canonical bridge. Answers 'what is Robinhood Chain / what runs on it?'.",
+        "Robinhood Chain (chain id 4663) at a glance: the Arbitrum-Orbit stack, RPC/explorer endpoints, and where each protocol lives — Uniswap v4 for stock-token trading, Morpho for lending, the canonical bridge. Answers 'what is Robinhood Chain / what runs on it?'. Getting money HERE: Yeetful's funding planner builds LiFi legs from Base/Ethereum/Arbitrum automatically (just ask the end action); the canonical bridge moves ETH from Ethereum; NEAR Intents does NOT reach this chain.",
       inputSchema: {},
     },
     async () => present(await reads.chainInfo()),
@@ -268,7 +268,7 @@ export function registerRobinhoodTools(server: Server): void {
     {
       title: "Bridge Overview",
       description:
-        "How to move funds between Ethereum and Robinhood Chain over the canonical Arbitrum bridge: routes, timing (deposits ≈ minutes, withdrawals ≈ 7 days + an L1 claim), contract addresses, and what must go through the bridge UI instead.",
+        "How to move funds between Ethereum and Robinhood Chain over the canonical Arbitrum bridge: routes, timing (deposits ≈ minutes, withdrawals ≈ 7 days + an L1 claim), contract addresses, and what must go through the bridge UI instead. Includes the lane map — when a funding shortfall should use Yeetful's automatic LiFi legs instead of this bridge, and why NEAR Intents never reaches Robinhood Chain.",
       inputSchema: {},
     },
     async () => present(await builds.bridgeInfo()),
@@ -279,7 +279,7 @@ export function registerRobinhoodTools(server: Server): void {
     {
       title: "Build: Bridge ETH In",
       description:
-        "Prepare an UNSIGNED Ethereum-mainnet transaction (chainId 1!) that bridges ETH into Robinhood Chain via the canonical Delayed Inbox — the same address is credited on the L2 within minutes. L1 balance checked before building. 'Bridge 0.1 ETH to Robinhood Chain'.",
+        "Prepare an UNSIGNED Ethereum-mainnet transaction (chainId 1!) that bridges ETH into Robinhood Chain via the canonical Delayed Inbox — the same address is credited on the L2 within minutes. L1 balance checked before building. 'Bridge 0.1 ETH to Robinhood Chain'. ETH only, from Ethereum only — to FUND a stock buy from USDC (any chain), skip manual bridging and ask for the buy itself: the funding planner builds LiFi legs automatically.",
       inputSchema: { user: userArg, amount: amountArg.describe('ETH amount to bridge in, e.g. "0.1".') },
     },
     async ({ user, amount }) => present(await builds.bridgeDeposit({ user: asUser(user), amount })),

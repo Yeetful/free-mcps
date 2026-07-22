@@ -543,6 +543,10 @@ export const builds = {
         "Stock tokens live natively on Robinhood Chain; they are not bridgeable assets.",
         "depositEth credits the sender's own address on the L2 — fine for EOAs, wrong for some smart-contract wallets.",
       ],
+      when_not_to_use: [
+        "Funding a stock buy? Don't hand-chain bridges — ask for the buy itself ('Buy $10 of AAPL') and Yeetful's funding planner builds LiFi legs from Base/Ethereum/Arbitrum USDC or ETH straight to USDG + gas on Robinhood Chain in SECONDS. This canonical bridge is the ETH-only, self-custody escape hatch (slow out), not the funding path.",
+        "Cross-chain swaps between majors (Base ↔ Arbitrum ↔ Ethereum ↔ Solana, …) belong to NEAR Intents — which can NOT reach Robinhood Chain at all. Robinhood Chain is reached ONLY via LiFi funding legs or this canonical bridge.",
+      ],
     });
   },
 };
